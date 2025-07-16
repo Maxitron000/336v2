@@ -1,2 +1,10 @@
-run = "python3.10 main.py"
+run = "python main.py"
 language = "python3"
+modules = ["python-3.12", "nix"]
+
+[deployment]
+run = ["sh", "-c", "python main.py"]
+
+[nix]
+channel = "stable-24_05"
+packages = ["glibcLocales"]
