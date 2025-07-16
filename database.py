@@ -25,12 +25,8 @@ class Database:
                 status TEXT DEFAULT 'в_части',
                 last_location TEXT,
                 last_status_change TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-<<<<<<< HEAD
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-=======
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 settings TEXT DEFAULT "{}"
->>>>>>> remotes/origin/cursor/bc-d421ab04-023e-46fb-828e-17488ae0c3ea-eea0
             )
         ''')
         
@@ -50,14 +46,11 @@ class Database:
         except:
             pass  # Колонка уже существует
         
-<<<<<<< HEAD
-=======
         try:
             cursor.execute('ALTER TABLE users ADD COLUMN settings TEXT DEFAULT "{}"')
         except:
             pass  # Колонка уже существует
         
->>>>>>> remotes/origin/cursor/bc-d421ab04-023e-46fb-828e-17488ae0c3ea-eea0
         # Таблица записей
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS records (
@@ -200,24 +193,6 @@ class Database:
             for row in results
         ]
     
-<<<<<<< HEAD
-    def get_all_records(self, days: int = 30) -> List[Dict]:
-        """Получение всех записей за период"""
-        conn = sqlite3.connect(self.db_name)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT r.id, u.full_name, r.action, r.location, r.timestamp, r.comment
-            FROM records r
-            JOIN users u ON r.user_id = u.id
-            WHERE r.timestamp >= datetime('now', '-{} days')
-            ORDER BY r.timestamp DESC
-        '''.format(days))
-        
-        results = cursor.fetchall()
-        conn.close()
-        
-=======
     def get_all_records(self, days: int = 30, order_by_time_only: bool = False) -> List[Dict]:
         """Получение всех записей за период"""
         conn = sqlite3.connect(self.db_name)
@@ -235,7 +210,6 @@ class Database:
         ''')
         results = cursor.fetchall()
         conn.close()
->>>>>>> remotes/origin/cursor/bc-d421ab04-023e-46fb-828e-17488ae0c3ea-eea0
         return [
             {
                 'id': row[0],
@@ -295,11 +269,7 @@ class Database:
     
     def export_to_excel(self, days: int = 30) -> str:
         """Экспорт данных в Excel"""
-<<<<<<< HEAD
-        records = self.get_all_records(days)
-=======
         records = self.get_all_records(days, order_by_time_only=True)
->>>>>>> remotes/origin/cursor/bc-d421ab04-023e-46fb-828e-17488ae0c3ea-eea0
         
         if not records:
             return None
@@ -330,8 +300,6 @@ class Database:
         
         return EXPORT_FILENAME
     
-<<<<<<< HEAD
-=======
     def export_to_excel_with_filters(self, start, end, soldier=None, location=None, action=None) -> str:
         """Экспорт отфильтрованных данных в Excel"""
         records = self.get_all_records_by_period(start, end, soldier, location, action)
@@ -359,7 +327,6 @@ class Database:
                     )
         return EXPORT_FILENAME
     
->>>>>>> remotes/origin/cursor/bc-d421ab04-023e-46fb-828e-17488ae0c3ea-eea0
     def cleanup_old_records(self, months: int = 6):
         """Очистка старых записей (старше 6 месяцев)"""
         conn = sqlite3.connect(self.db_name)
@@ -590,9 +557,6 @@ class Database:
         
         total_pages = (total_users + per_page - 1) // per_page
         
-<<<<<<< HEAD
-        return users, page, total_pages
-=======
         return users, page, total_pages
 
     def get_user_settings(self, user_id: int) -> dict:
@@ -695,4 +659,3 @@ class Database:
             }
             for row in results
         ]
->>>>>>> remotes/origin/cursor/bc-d421ab04-023e-46fb-828e-17488ae0c3ea-eea0

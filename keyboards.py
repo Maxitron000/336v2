@@ -166,8 +166,6 @@ def get_confirm_keyboard(action: str, data: str = "") -> InlineKeyboardMarkup:
 def get_back_keyboard(callback_data: str = "main_menu") -> InlineKeyboardMarkup:
     """Простая клавиатура с кнопкой назад"""
     keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data=callback_data)]]
-<<<<<<< HEAD
-=======
     return InlineKeyboardMarkup(keyboard)
 
 def get_general_settings_keyboard() -> InlineKeyboardMarkup:
@@ -178,5 +176,4 @@ def get_general_settings_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("⏳ Формат времени", callback_data="general_set_timeformat")],
         [InlineKeyboardButton("🔙 Назад", callback_data="admin_settings")]
     ]
->>>>>>> remotes/origin/cursor/bc-d421ab04-023e-46fb-828e-17488ae0c3ea-eea0
     return InlineKeyboardMarkup(keyboard)

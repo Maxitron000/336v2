@@ -5,13 +5,10 @@ from config import BOT_TOKEN
 from handlers import Handlers
 from database import Database
 from telegram import Update
-<<<<<<< HEAD
-=======
 import time
 from datetime import datetime, timedelta
 import json, os
 from random_phrases import get_random_phrase
->>>>>>> remotes/origin/cursor/bc-d421ab04-023e-46fb-828e-17488ae0c3ea-eea0
 
 # Настройка логирования
 logging.basicConfig(
@@ -33,8 +30,6 @@ async def cleanup_old_records():
             logger.error(f"Ошибка при очистке записей: {e}")
             await asyncio.sleep(3600)  # 1 час при ошибке
 
-<<<<<<< HEAD
-=======
 async def send_reminders(application):
     """Фоновая задача для отправки напоминаний"""
     db = Database()
@@ -109,7 +104,6 @@ async def send_reminders(application):
                 except Exception as e:
                     print(f"Ошибка отправки сводки админу {admin['id']}: {e}")
 
->>>>>>> remotes/origin/cursor/bc-d421ab04-023e-46fb-828e-17488ae0c3ea-eea0
 async def main():
     """Основная функция запуска бота"""
     # Создаем экземпляр обработчиков
@@ -125,11 +119,8 @@ async def main():
     
     # Запускаем очистку старых записей в фоне
     asyncio.create_task(cleanup_old_records())
-<<<<<<< HEAD
-=======
     # Запускаем фоновую задачу напоминаний
     asyncio.create_task(send_reminders(application))
->>>>>>> remotes/origin/cursor/bc-d421ab04-023e-46fb-828e-17488ae0c3ea-eea0
     
     # Запускаем бота
     logger.info("Бот запущен!")
