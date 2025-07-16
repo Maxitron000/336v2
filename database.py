@@ -22,9 +22,28 @@ class Database:
                 username TEXT UNIQUE,
                 full_name TEXT NOT NULL,
                 is_admin BOOLEAN DEFAULT FALSE,
+                status TEXT DEFAULT 'в_части',
+                last_location TEXT,
+                last_status_change TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        
+        # Добавляем новые колонки если их нет (миграция)
+        try:
+            cursor.execute('ALTER TABLE users ADD COLUMN status TEXT DEFAULT "в_части"')
+        except:
+            pass  # Колонка уже существует
+        
+        try:
+            cursor.execute('ALTER TABLE users ADD COLUMN last_location TEXT')
+        except:
+            pass  # Колонка уже существует
+        
+        try:
+            cursor.execute('ALTER TABLE users ADD COLUMN last_status_change TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+        except:
+            pass  # Колонка уже существует
         
         # Таблица записей
         cursor.execute('''
@@ -120,10 +139,19 @@ class Database:
             conn = sqlite3.connect(self.db_name)
             cursor = conn.cursor()
             
+            # Добавляем запись
             cursor.execute('''
                 INSERT INTO records (user_id, action, location, comment)
                 VALUES (?, ?, ?, ?)
             ''', (user_id, action, location, comment))
+            
+            # Обновляем статус пользователя
+            new_status = 'вне_части' if action == 'убыл' else 'в_части'
+            cursor.execute('''
+                UPDATE users 
+                SET status = ?, last_location = ?, last_status_change = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (new_status, location, user_id))
             
             conn.commit()
             conn.close()
@@ -363,3 +391,136 @@ class Database:
     def get_user_by_id(self, user_id: int) -> Optional[Dict]:
         """Получение пользователя по ID"""
         return self.get_user(user_id)
+    
+    def get_soldiers_by_status(self, status: str) -> List[Dict]:
+        """Получение бойцов по статусу"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT id, username, full_name, status, last_location, last_status_change
+            FROM users 
+            WHERE status = ? AND is_admin = FALSE
+            ORDER BY full_name
+        ''', (status,))
+        
+        results = cursor.fetchall()
+        conn.close()
+        
+        return [
+            {
+                'id': row[0],
+                'username': row[1],
+                'full_name': row[2],
+                'status': row[3],
+                'last_location': row[4],
+                'last_status_change': row[5]
+            }
+            for row in results
+        ]
+    
+    def mark_all_arrived(self) -> int:
+        """Отметить всех бойцов прибывшими"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE users 
+            SET status = 'в_части', last_status_change = CURRENT_TIMESTAMP
+            WHERE is_admin = FALSE AND status = 'вне_части'
+        ''')
+        
+        updated_count = cursor.rowcount
+        
+        # Добавляем записи о прибытии
+        cursor.execute('''
+            SELECT id FROM users 
+            WHERE is_admin = FALSE AND status = 'в_части'
+        ''')
+        
+        user_ids = [row[0] for row in cursor.fetchall()]
+        
+        for user_id in user_ids:
+            cursor.execute('''
+                INSERT INTO records (user_id, action, location, comment)
+                VALUES (?, 'прибыл', '🏠 Часть', 'Массовая отметка')
+            ''', (user_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        return updated_count
+    
+    def clear_all_data(self) -> bool:
+        """Очистить все данные (опасная операция)"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            
+            # Сохраняем главного админа
+            main_admin = None
+            if MAIN_ADMIN_ID:
+                cursor.execute('SELECT * FROM users WHERE id = ?', (MAIN_ADMIN_ID,))
+                main_admin = cursor.fetchone()
+            
+            # Очищаем все таблицы
+            cursor.execute('DELETE FROM records')
+            cursor.execute('DELETE FROM admins WHERE id != ?', (MAIN_ADMIN_ID,))
+            cursor.execute('DELETE FROM users WHERE id != ?', (MAIN_ADMIN_ID,))
+            
+            # Восстанавливаем главного админа если нужно
+            if main_admin and MAIN_ADMIN_ID:
+                cursor.execute('''
+                    INSERT OR REPLACE INTO users (id, username, full_name, is_admin)
+                    VALUES (?, ?, ?, ?)
+                ''', main_admin)
+                
+                cursor.execute('''
+                    INSERT OR REPLACE INTO admins (id, username, permissions, appointed_by)
+                    VALUES (?, ?, ?, ?)
+                ''', (MAIN_ADMIN_ID, 'main_admin', 'all', MAIN_ADMIN_ID))
+            
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Ошибка очистки данных: {e}")
+            return False
+    
+    def get_users_list(self, page: int = 1, per_page: int = 8) -> tuple:
+        """Получение списка пользователей с пагинацией"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        # Общее количество пользователей
+        cursor.execute('SELECT COUNT(*) FROM users WHERE is_admin = FALSE')
+        total_users = cursor.fetchone()[0]
+        
+        # Пользователи для текущей страницы
+        offset = (page - 1) * per_page
+        cursor.execute('''
+            SELECT id, username, full_name, status, last_location, last_status_change
+            FROM users 
+            WHERE is_admin = FALSE
+            ORDER BY full_name
+            LIMIT ? OFFSET ?
+        ''', (per_page, offset))
+        
+        results = cursor.fetchall()
+        conn.close()
+        
+        users = [
+            {
+                'id': row[0],
+                'username': row[1],
+                'full_name': row[2],
+                'status': row[3],
+                'last_location': row[4],
+                'last_status_change': row[5]
+            }
+            for row in results
+        ]
+        
+        total_pages = (total_users + per_page - 1) // per_page
+        
+        return users, page, total_pages

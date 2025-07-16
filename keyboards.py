@@ -48,15 +48,13 @@ def get_journal_keyboard(expanded: bool = False) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 def get_admin_panel_keyboard(is_main_admin: bool = False) -> InlineKeyboardMarkup:
-    """Панель администратора"""
+    """Панель администратора - Уровень 1"""
     keyboard = [
-        [InlineKeyboardButton("📊 Статистика", callback_data="admin_stats")],
-        [InlineKeyboardButton("📋 Все записи", callback_data="admin_records")],
-        [InlineKeyboardButton("📤 Экспорт данных", callback_data="admin_export")]
+        [InlineKeyboardButton("📊 Быстрая сводка", callback_data="admin_summary")],
+        [InlineKeyboardButton("👥 Управление л/с", callback_data="admin_personnel")],
+        [InlineKeyboardButton("📖 Журнал событий", callback_data="admin_journal")],
+        [InlineKeyboardButton("⚙️ Настройки", callback_data="admin_settings")]
     ]
-    
-    if is_main_admin:
-        keyboard.append([InlineKeyboardButton("👥 Управление админами", callback_data="admin_manage")])
     
     keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="main_menu")])
     
@@ -67,8 +65,73 @@ def get_admin_management_keyboard() -> InlineKeyboardMarkup:
     keyboard = [
         [InlineKeyboardButton("➕ Добавить админа", callback_data="admin_add")],
         [InlineKeyboardButton("➖ Удалить админа", callback_data="admin_remove")],
-        [InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]
+        [InlineKeyboardButton("🔙 Назад", callback_data="admin_settings")]
     ]
+    
+    return InlineKeyboardMarkup(keyboard)
+
+def get_personnel_management_keyboard() -> InlineKeyboardMarkup:
+    """Управление личным составом - Уровень 2"""
+    keyboard = [
+        [InlineKeyboardButton("✏️ Сменить ФИО бойца", callback_data="personnel_edit_name")],
+        [InlineKeyboardButton("➕ Добавить нового бойца", callback_data="personnel_add")],
+        [InlineKeyboardButton("❌ Удалить бойца", callback_data="personnel_remove")]
+    ]
+    
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")])
+    
+    return InlineKeyboardMarkup(keyboard)
+
+def get_journal_management_keyboard() -> InlineKeyboardMarkup:
+    """Журнал событий - Уровень 2"""
+    keyboard = [
+        [InlineKeyboardButton("📥 Экспорт журнала", callback_data="journal_export")],
+        [InlineKeyboardButton("📊 Статистика", callback_data="journal_stats")],
+        [InlineKeyboardButton("📋 Все записи", callback_data="journal_records")]
+    ]
+    
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")])
+    
+    return InlineKeyboardMarkup(keyboard)
+
+def get_settings_keyboard(is_main_admin: bool = False) -> InlineKeyboardMarkup:
+    """Настройки - Уровень 2"""
+    keyboard = [
+        [InlineKeyboardButton("🔔 Уведомления", callback_data="settings_notifications")],
+        [InlineKeyboardButton("⚙️ Общие настройки", callback_data="settings_general")]
+    ]
+    
+    if is_main_admin:
+        keyboard.append([InlineKeyboardButton("👑 Управление админами", callback_data="admin_manage")])
+        keyboard.append([InlineKeyboardButton("⚠️ Опасная зона", callback_data="settings_danger_zone")])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")])
+    
+    return InlineKeyboardMarkup(keyboard)
+
+def get_danger_zone_keyboard() -> InlineKeyboardMarkup:
+    """Опасная зона - Уровень 3"""
+    keyboard = [
+        [InlineKeyboardButton("🚨 Отметить всех прибывшими", callback_data="danger_mark_all_arrived")],
+        [InlineKeyboardButton("🗑️ Очистить все данные", callback_data="danger_clear_all_data")],
+        [InlineKeyboardButton("🔄 Сбросить настройки", callback_data="danger_reset_settings")]
+    ]
+    
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_settings")])
+    
+    return InlineKeyboardMarkup(keyboard)
+
+def get_notifications_settings_keyboard() -> InlineKeyboardMarkup:
+    """Настройки уведомлений"""
+    keyboard = [
+        [InlineKeyboardButton("🔔 Включить уведомления", callback_data="notif_enable")],
+        [InlineKeyboardButton("🔕 Отключить уведомления", callback_data="notif_disable")],
+        [InlineKeyboardButton("⏰ Настройка времени", callback_data="notif_time")],
+        [InlineKeyboardButton("👥 Выбор получателей", callback_data="notif_recipients")],
+        [InlineKeyboardButton("🔇 Режим тишины", callback_data="notif_silent")]
+    ]
+    
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_settings")])
     
     return InlineKeyboardMarkup(keyboard)
 
