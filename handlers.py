@@ -812,6 +812,20 @@ class Handlers:
                 del self.user_states[user_id]['state']
             await self.show_journal_management(update, context, query)
             return
+        elif data == "stats_page_prev":
+            page = self.user_states.get(user_id, {}).get('stats_page', 1)
+            self.user_states[user_id]['stats_page'] = max(1, page - 1)
+            await self.show_journal_statistics(update, context, query)
+            return
+        elif data == "stats_page_next":
+            page = self.user_states.get(user_id, {}).get('stats_page', 1)
+            self.user_states[user_id]['stats_page'] = page + 1
+            await self.show_journal_statistics(update, context, query)
+            return
+        elif data.startswith("stats_period_") or data.startswith("stats_filter_soldier_") or data.startswith("stats_filter_location_") or data == "stats_filter_reset":
+            if user_id not in self.user_states:
+                self.user_states[user_id] = {}
+            self.user_states[user_id]['stats_page'] = 1
         else:
             await query.edit_message_text(
                 "Функция в разработке или недоступна.",
@@ -1393,6 +1407,20 @@ class Handlers:
                 del self.user_states[user_id]['state']
             await self.show_journal_management(update, context, query)
             return
+        elif data == "stats_page_prev":
+            page = self.user_states.get(user_id, {}).get('stats_page', 1)
+            self.user_states[user_id]['stats_page'] = max(1, page - 1)
+            await self.show_journal_statistics(update, context, query)
+            return
+        elif data == "stats_page_next":
+            page = self.user_states.get(user_id, {}).get('stats_page', 1)
+            self.user_states[user_id]['stats_page'] = page + 1
+            await self.show_journal_statistics(update, context, query)
+            return
+        elif data.startswith("stats_period_") or data.startswith("stats_filter_soldier_") or data.startswith("stats_filter_location_") or data == "stats_filter_reset":
+            if user_id not in self.user_states:
+                self.user_states[user_id] = {}
+            self.user_states[user_id]['stats_page'] = 1
         else:
             await query.edit_message_text(
                 "Функция в разработке или недоступна.",
@@ -1761,10 +1789,12 @@ class Handlers:
             json.dump(data, f, ensure_ascii=False)
 
     async def show_journal_statistics(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
-        """Показать статистику журнала с фильтрами"""
+        """Показать статистику журнала с фильтрами и пагинацией топ-локаций"""
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         user_id = update.effective_user.id
         filters = self.user_states.get(user_id, {}).get('stats_filters', {})
+        page = self.user_states.get(user_id, {}).get('stats_page', 1)
+        PAGE_SIZE = 10
         keyboard = [
             [InlineKeyboardButton("📅 Период", callback_data="stats_filter_period")],
             [InlineKeyboardButton("👤 Боец", callback_data="stats_filter_soldier")],
@@ -1805,17 +1835,30 @@ class Handlers:
         for r in records:
             action_stats[r['action']] = action_stats.get(r['action'], 0) + 1
             location_stats[r['location']] = location_stats.get(r['location'], 0) + 1
+        # Пагинация топ-локаций
+        sorted_locations = sorted(location_stats.items(), key=lambda x: -x[1])
+        total_pages = max(1, (len(sorted_locations) + PAGE_SIZE - 1) // PAGE_SIZE)
+        page = max(1, min(page, total_pages))
+        start_idx = (page - 1) * PAGE_SIZE
+        end_idx = start_idx + PAGE_SIZE
+        page_locations = sorted_locations[start_idx:end_idx]
         text = f"📊 Статистика журнала за {period.lower()}\n\n"
         text += f"📈 Всего записей: {total_records}\n"
         text += "\n📊 По действиям:\n"
         for action, count in action_stats.items():
             emoji = "🚶" if action == "убыл" else "🏠"
             text += f"{emoji} {action}: {count}\n"
-        text += "\n🏆 Топ локаций:\n"
-        for i, (location, count) in enumerate(sorted(location_stats.items(), key=lambda x: -x[1])[:5], 1):
+        text += f"\n🏆 Топ локаций (стр. {page}/{total_pages}):\n"
+        for i, (location, count) in enumerate(page_locations, 1 + start_idx):
             text += f"{i}. {location}: {count}\n"
         text += f"\n{filter_text}"
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+        # Кнопки пагинации
+        buttons = []
+        if page > 1:
+            buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data="stats_page_prev"))
+        if page < total_pages:
+            buttons.append(InlineKeyboardButton("Вперёд ➡️", callback_data="stats_page_next"))
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup([buttons, *keyboard]))
 
     def _get_stats_filter_text(self, filters):
         text = "<b>Текущие фильтры:</b>\n"
