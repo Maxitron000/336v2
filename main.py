@@ -7,6 +7,7 @@ from database import Database
 from telegram import Update
 import time
 from datetime import datetime, timedelta
+import json, os
 
 # Настройка логирования
 logging.basicConfig(
@@ -30,24 +31,39 @@ async def cleanup_old_records():
 
 async def send_reminders(application):
     """Фоновая задача для отправки напоминаний"""
-    from database import Database
     db = Database()
+    def get_times():
+        fname = 'notification_times.json'
+        times = {"soldiers": "18:40", "admins": "19:00"}
+        if os.path.exists(fname):
+            try:
+                with open(fname, 'r', encoding='utf-8') as f:
+                    times = json.load(f)
+            except Exception:
+                pass
+        return times
     while True:
+        times = get_times()
+        soldiers_time = times.get('soldiers', '18:40')
+        admins_time = times.get('admins', '19:00')
+        from datetime import datetime, timedelta
         now = datetime.now()
-        # Следующее срабатывание в 18:40
-        next_1840 = now.replace(hour=18, minute=40, second=0, microsecond=0)
-        if now >= next_1840:
-            next_1840 += timedelta(days=1)
-        # Следующее срабатывание в 19:00
-        next_1900 = now.replace(hour=19, minute=0, second=0, microsecond=0)
-        if now >= next_1900:
-            next_1900 += timedelta(days=1)
+        # Следующее срабатывание для бойцов
+        h_s, m_s = map(int, soldiers_time.split(':'))
+        next_soldiers = now.replace(hour=h_s, minute=m_s, second=0, microsecond=0)
+        if now >= next_soldiers:
+            next_soldiers += timedelta(days=1)
+        # Следующее срабатывание для админов
+        h_a, m_a = map(int, admins_time.split(':'))
+        next_admins = now.replace(hour=h_a, minute=m_a, second=0, microsecond=0)
+        if now >= next_admins:
+            next_admins += timedelta(days=1)
         # Ждём до ближайшего события
-        sleep_seconds = min((next_1840 - now).total_seconds(), (next_1900 - now).total_seconds())
+        sleep_seconds = min((next_soldiers - now).total_seconds(), (next_admins - now).total_seconds())
         await asyncio.sleep(sleep_seconds)
         now = datetime.now()
-        if now.hour == 18 and now.minute == 40:
-            # Напоминания бойцам
+        # Проверяем, что сейчас время для бойцов
+        if now.hour == h_s and now.minute == m_s:
             soldiers = db.get_soldiers_by_status('вне_части')
             for user in soldiers:
                 try:
@@ -57,12 +73,10 @@ async def send_reminders(application):
                     )
                 except Exception as e:
                     print(f"Ошибка отправки напоминания бойцу {user['id']}: {e}")
-        if now.hour == 19 and now.minute == 0:
-            # Сводка для админов
+        # Проверяем, что сейчас время для админов
+        if now.hour == h_a and now.minute == m_a:
             admins = db.get_all_admins()
             all_soldiers, _, _ = db.get_users_list(page=1, per_page=10000)
-            from datetime import datetime
-            # Сортируем по ФИО
             all_soldiers = sorted(all_soldiers, key=lambda u: u['full_name'])
             out_list = []
             in_list = []
@@ -77,7 +91,7 @@ async def send_reminders(application):
                     out_list.append(line)
                 else:
                     in_list.append(line)
-            summary = "📋 Сводка по бойцам на 19:00:\n\n"
+            summary = "📋 Сводка по бойцам:\n\n"
             summary += "🚶 ВНЕ ЧАСТИ:\n" + ("\n".join(out_list) if out_list else "—") + "\n\n"
             summary += "🏠 В ЧАСТИ:\n" + ("\n".join(in_list) if in_list else "—")
             for admin in admins:
