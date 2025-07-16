@@ -132,6 +132,38 @@ class Handlers:
             is_admin = self.db.is_admin(user_id)
             await self.show_main_menu(update, context, is_admin)
             return
+        elif state == 'waiting_for_new_soldier_tgid':
+            # Добавление по Telegram ID
+            tgid_text = update.message.text.strip()
+            try:
+                tgid = int(tgid_text)
+            except ValueError:
+                await update.message.reply_text("ID должен быть числом. Попробуйте еще раз:")
+                return
+            user = self.db.get_user(tgid)
+            if not user:
+                await update.message.reply_text("Пользователь с таким Telegram ID не найден. Убедитесь, что он написал /start боту.")
+                return
+            self.user_states[user_id] = {"state": "waiting_for_new_soldier_name_by_tgid", "tgid": tgid}
+            await update.message.reply_text(
+                "Введите ФИО для бойца в формате: Фамилия И.О.\n\nПример: Иванов И.И.")
+            return
+        elif state == 'waiting_for_new_soldier_name_by_tgid':
+            tgid = self.user_states[user_id]['tgid']
+            new_name = update.message.text.strip()
+            import re
+            if not re.match(r'^[А-ЯЁ][а-яё]+ [А-ЯЁ]\.[А-ЯЁ]\.$', new_name):
+                await update.message.reply_text(
+                    "Неверный формат ФИО!\n\nПравильный формат: Фамилия И.О.\nПример: Иванов И.И.\n\nПопробуйте еще раз:")
+                return
+            if self.db.update_user_full_name(tgid, new_name):
+                await update.message.reply_text(f"✅ ФИО бойца с Telegram ID {tgid} успешно установлено: {new_name}")
+            else:
+                await update.message.reply_text("❌ Ошибка при обновлении ФИО. Попробуйте еще раз.")
+            del self.user_states[user_id]
+            is_admin = self.db.is_admin(user_id)
+            await self.show_main_menu(update, context, is_admin)
+            return
         else:
             await update.message.reply_text("Используйте кнопки меню для навигации.")
     
@@ -279,6 +311,20 @@ class Handlers:
             self.user_states[user_id] = {"state": "waiting_for_new_name", "soldier_id": soldier_id}
             await query.edit_message_text(
                 "Введите новое ФИО для бойца в формате: Фамилия И.О.\n\nПример: Иванов И.И.",
+                reply_markup=get_back_keyboard("admin_personnel")
+            )
+            return
+        elif data == "addsoldier_tgid":
+            self.user_states[user_id] = {"state": "waiting_for_new_soldier_tgid"}
+            await query.edit_message_text(
+                "Введите Telegram ID бойца (число):",
+                reply_markup=get_back_keyboard("admin_personnel")
+            )
+            return
+        elif data == "addsoldier_manual":
+            self.user_states[user_id] = {"state": "waiting_for_new_soldier_name"}
+            await query.edit_message_text(
+                "Введите ФИО нового бойца в формате: Фамилия И.О.\n\nПример: Иванов И.И.",
                 reply_markup=get_back_keyboard("admin_personnel")
             )
             return
@@ -566,10 +612,15 @@ class Handlers:
     async def add_new_soldier(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
         """Добавление нового бойца"""
         user_id = update.effective_user.id
-        self.user_states[user_id] = {"state": "waiting_for_new_soldier_name"}
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        keyboard = [
+            [InlineKeyboardButton("По Telegram ID", callback_data="addsoldier_tgid")],
+            [InlineKeyboardButton("Вручную", callback_data="addsoldier_manual")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="admin_personnel")]
+        ]
         await query.edit_message_text(
-            "Введите ФИО нового бойца в формате: Фамилия И.О.\n\nПример: Иванов И.И.",
-            reply_markup=get_back_keyboard("admin_personnel")
+            "Выберите способ добавления бойца:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
     async def remove_soldier(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
