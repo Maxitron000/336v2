@@ -41,6 +41,80 @@ async def is_main_admin(user_id: int) -> bool:
     """Проверка главного админа"""
     return user_id == MAIN_ADMIN_ID
 
+@router.callback_query(F.data == "admin_summary")
+async def callback_admin_summary(callback: CallbackQuery):
+    """Быстрая сводка"""
+    try:
+        if not await is_admin(callback.from_user.id):
+            await callback.answer("❌ У вас нет прав", show_alert=True)
+            return
+        
+        # Получаем данные
+        users = await DBService.get_all_users()
+        soldiers = sorted([u for u in users if not u.get('is_admin', False)], 
+                         key=lambda x: x['full_name'])
+        
+        # Статистика по статусам
+        present_list = []
+        absent_list = []
+        
+        for soldier in soldiers:
+            records = await DBService.get_user_records(soldier['id'], 1)
+            if records and records[0]['action'] == 'прибыл':
+                time_str = format_kaliningrad_time(records[0]['timestamp'])
+                location = records[0]['location']
+                present_list.append((soldier['full_name'], time_str, location))
+            else:
+                time_str = format_kaliningrad_time(records[0]['timestamp']) if records else "—"
+                location = records[0]['location'] if records else "—"
+                absent_list.append((soldier['full_name'], time_str, location))
+        
+        # Формируем красивый текст
+        text = f"""
+📊 **БЫСТРАЯ СВОДКА**
+🏛️ *336 инженерно-маскировочный батальон*
+
+━━━━━━━━━━━━━━━━━━━━━━━━━
+🕐 **{datetime.now(KALININGRAD_TZ).strftime('%d.%m.%Y %H:%M')}**
+━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🏠 **НА МЕСТЕ** ({len(present_list)} чел.):
+"""
+        
+        if present_list:
+            for name, time, location in present_list[:10]:  # Первые 10
+                text += f"┣ ✅ {name}\n"
+                text += f"┃   📍 {location}\n"
+                text += f"┃   ⏰ {time}\n"
+            if len(present_list) > 10:
+                text += f"┗ ... и ещё {len(present_list) - 10} чел.\n"
+        else:
+            text += "┗ Никого нет\n"
+        
+        text += f"\n🚶 **УБЫЛИ** ({len(absent_list)} чел.):\n"
+        
+        if absent_list:
+            for name, time, location in absent_list[:10]:  # Первые 10
+                text += f"┣ ❌ {name}\n"
+                text += f"┃   📍 {location}\n"
+                text += f"┃   ⏰ {time}\n"
+            if len(absent_list) > 10:
+                text += f"┗ ... и ещё {len(absent_list) - 10} чел.\n"
+        else:
+            text += "┗ Все на месте\n"
+        
+        text += "\n━━━━━━━━━━━━━━━━━━━━━━━━━"
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_back_keyboard("admin_panel"),
+            parse_mode='Markdown'
+        )
+        await callback.answer()
+    except Exception as e:
+        logging.error(f"Ошибка в callback_admin_summary: {e}")
+        await callback.answer("❌ Ошибка")
+
 def format_kaliningrad_time(dt_str):
     """Форматирование времени в калининградский часовой пояс"""
     try:
@@ -93,12 +167,45 @@ async def callback_admin_panel(callback: CallbackQuery, state: FSMContext):
         
         await state.clear()
         
-        admin_text = """
+        # Получаем статистику для превью
+        users = await DBService.get_all_users()
+        soldiers = [u for u in users if not u.get('is_admin', False)]
+        admins = [u for u in users if u.get('is_admin', False)]
+        
+        # Подсчет статуса
+        present = 0
+        absent = 0
+        for soldier in soldiers:
+            records = await DBService.get_user_records(soldier['id'], 1)
+            if records and records[0]['action'] == 'прибыл':
+                present += 1
+            else:
+                absent += 1
+        
+        # Статистика за сегодня
+        today = datetime.now(KALININGRAD_TZ).date()
+        today_records = await DBService.get_records_by_date(today)
+        
+        admin_text = f"""
 🛡️ **АДМИН-ПАНЕЛЬ**
-336 инженерно-маскировочный батальон
+🏛️ *336 инженерно-маскировочный батальон*
 
-🎯 Система управления электронным табелем
-⚡ Выберите раздел для работы:
+━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 **ОПЕРАТИВНАЯ СВОДКА**
+━━━━━━━━━━━━━━━━━━━━━━━━━
+
+👥 **Личный состав:** {len(soldiers)} чел.
+┣ 🏠 На месте: **{present}** чел.
+┗ 🚶 Убыли: **{absent}** чел.
+
+👨‍💼 **Администраторов:** {len(admins)} чел.
+
+📝 **Активность за сегодня:** {len(today_records)} записей
+
+🕐 **Время обновления:** {datetime.now(KALININGRAD_TZ).strftime('%H:%M')}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━
+⚡ **СИСТЕМА УПРАВЛЕНИЯ**
         """
         
         await callback.message.edit_text(

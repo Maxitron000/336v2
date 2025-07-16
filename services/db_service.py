@@ -176,3 +176,34 @@ class DBService:
         except Exception as e:
             logging.error(f"Ошибка получения записей: {e}")
             return []
+
+    @staticmethod
+    async def get_records_by_date(date):
+        """Получить записи по дате"""
+        try:
+            async with aiosqlite.connect(DB_NAME) as db:
+                cursor = await db.execute(
+                    """
+                    SELECT id, user_id, action, location, timestamp, comment
+                    FROM records
+                    WHERE DATE(timestamp) = ?
+                    ORDER BY timestamp DESC
+                    """,
+                    (date,)
+                )
+                records = await cursor.fetchall()
+
+                return [
+                    {
+                        'id': record[0],
+                        'user_id': record[1],
+                        'action': record[2],
+                        'location': record[3],
+                        'timestamp': record[4],
+                        'comment': record[5]
+                    }
+                    for record in records
+                ]
+        except Exception as e:
+            logging.error(f"Ошибка получения записей по дате: {e}")
+            return []
