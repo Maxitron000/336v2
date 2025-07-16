@@ -8,12 +8,47 @@ from services.db_service import DBService
 from config import LOCATIONS, MAIN_ADMIN_ID
 from keyboards import get_main_menu_keyboard, get_location_keyboard, get_back_keyboard
 import logging
+from datetime import datetime
+import pytz
 
 router = Router()
 
 class UserStates(StatesGroup):
     waiting_for_name = State()
     waiting_for_comment = State()
+
+def get_kaliningrad_time():
+    """Получить текущее время в Калининграде"""
+    tz = pytz.timezone('Europe/Kaliningrad')
+    now = datetime.now(tz)
+    return now.strftime('%H:%M:%S')
+
+def get_kaliningrad_date():
+    """Получить текущую дату в Калининграде"""
+    tz = pytz.timezone('Europe/Kaliningrad')
+    now = datetime.now(tz)
+    return now.strftime('%d.%m.%Y')
+
+def get_welcome_preview():
+    """Создать красивую превью для приветствия"""
+    time = get_kaliningrad_time()
+    date = get_kaliningrad_date()
+    
+    preview = f"""
+🏛️ **СИСТЕМА ВОЕННОГО ТАБЕЛЯ**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🌍 **Калининград**
+📅 Дата: {date}
+🕐 Время: {time}
+
+⚓ **336 ОБРМП**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔐 **Система готова к работе**
+👤 Для начала работы введите /start
+    """
+    return preview
 
 @router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext):
@@ -22,15 +57,42 @@ async def cmd_start(message: Message, state: FSMContext):
         user = await DBService.get_user(message.from_user.id)
         if user:
             is_admin = user['is_admin'] or message.from_user.id == MAIN_ADMIN_ID
+            time = get_kaliningrad_time()
+            date = get_kaliningrad_date()
+            
+            welcome_text = f"""
+🏛️ **СИСТЕМА ВОЕННОГО ТАБЕЛЯ**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🌍 **Калининград**
+📅 {date} | 🕐 {time}
+
+⚓ **336 ОБРМП**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+👋 **Добро пожаловать, {user['full_name']}!**
+🔐 Статус: {'🛡️ Администратор' if is_admin else '👤 Пользователь'}
+
+📋 Выберите действие:
+            """
+            
             await message.answer(
-                f"Добро пожаловать обратно, {user['full_name']}!\n"
-                "Выберите действие:",
-                reply_markup=get_main_menu_keyboard(is_admin)
+                welcome_text,
+                reply_markup=get_main_menu_keyboard(is_admin),
+                parse_mode="Markdown"
             )
         else:
+            preview = get_welcome_preview()
             await message.answer(
-                "Добро пожаловать в систему военного табеля!\n"
-                "Введите ваше ФИО для регистрации:"
+                preview,
+                parse_mode="Markdown"
+            )
+            await message.answer(
+                "📝 **Регистрация в системе**\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                "Введите ваше **ФИО** для регистрации:\n"
+                "*(Например: Иванов Иван Иванович)*",
+                parse_mode="Markdown"
             )
             await state.set_state(UserStates.waiting_for_name)
     except Exception as e:
@@ -43,7 +105,13 @@ async def process_name(message: Message, state: FSMContext):
     try:
         full_name = message.text.strip()
         if len(full_name) < 3:
-            await message.answer("ФИО должно содержать минимум 3 символа. Попробуйте еще раз:")
+            await message.answer(
+                "❌ **Ошибка валидации**\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                "ФИО должно содержать минимум 3 символа.\n"
+                "Попробуйте еще раз:",
+                parse_mode="Markdown"
+            )
             return
         
         success = await DBService.add_user(
@@ -53,14 +121,37 @@ async def process_name(message: Message, state: FSMContext):
         )
         
         if success:
+            time = get_kaliningrad_time()
+            date = get_kaliningrad_date()
+            
+            success_text = f"""
+✅ **РЕГИСТРАЦИЯ ЗАВЕРШЕНА**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+👤 **{full_name}**
+🆔 ID: {message.from_user.id}
+📅 {date} | 🕐 {time}
+
+⚓ **336 ОБРМП**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 **Система готова к работе!**
+📋 Выберите действие:
+            """
+            
             await message.answer(
-                f"Регистрация завершена, {full_name}!\n"
-                "Выберите действие:",
-                reply_markup=get_main_menu_keyboard(False)
+                success_text,
+                reply_markup=get_main_menu_keyboard(False),
+                parse_mode="Markdown"
             )
             await state.clear()
         else:
-            await message.answer("Ошибка регистрации. Попробуйте позже.")
+            await message.answer(
+                "❌ **Ошибка регистрации**\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                "Попробуйте позже или обратитесь к администратору.",
+                parse_mode="Markdown"
+            )
     except Exception as e:
         logging.error(f"Ошибка в process_name: {e}")
         await message.answer("Произошла ошибка. Попробуйте позже.")
@@ -75,21 +166,36 @@ async def cmd_profile(message: Message):
             return
         
         records = await DBService.get_user_records(message.from_user.id, 5)
+        time = get_kaliningrad_time()
+        date = get_kaliningrad_date()
         
-        profile_text = f"👤 Профиль: {user['full_name']}\n"
-        profile_text += f"🆔 ID: {user['id']}\n"
-        profile_text += f"🛡️ Админ: {'Да' if user['is_admin'] else 'Нет'}\n\n"
+        profile_text = f"""
+👤 **ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🌍 **Калининград**
+📅 {date} | 🕐 {time}
+
+⚓ **336 ОБРМП**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+👤 **{user['full_name']}**
+🆔 ID: {user['id']}
+🛡️ Статус: {'Администратор' if user['is_admin'] else 'Пользователь'}
+
+📋 **ПОСЛЕДНИЕ ЗАПИСИ:**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        """
         
         if records:
-            profile_text += "📋 Последние записи:\n"
             for record in records:
                 action_emoji = "🟢" if record['action'] == 'прибыл' else "🔴"
-                profile_text += f"{action_emoji} {record['action']} - {record['location']}\n"
-                profile_text += f"   {record['timestamp']}\n"
+                profile_text += f"\n{action_emoji} **{record['action'].upper()}** - {record['location']}"
+                profile_text += f"\n   📅 {record['timestamp']}\n"
         else:
-            profile_text += "📋 Записей пока нет"
+            profile_text += "\n📝 Записей пока нет"
         
-        await message.answer(profile_text)
+        await message.answer(profile_text, parse_mode="Markdown")
     except Exception as e:
         logging.error(f"Ошибка в cmd_profile: {e}")
         await message.answer("Произошла ошибка. Попробуйте позже.")
@@ -97,19 +203,35 @@ async def cmd_profile(message: Message):
 @router.message(Command("help"))
 async def cmd_help(message: Message):
     """Показать справку"""
-    help_text = """
-🆘 Справка по боту:
+    time = get_kaliningrad_time()
+    date = get_kaliningrad_date()
+    
+    help_text = f"""
+🆘 **СПРАВКА ПО СИСТЕМЕ**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-/start - Регистрация в системе
-/profile - Ваш профиль и последние записи
-/admin - Админ-панель (только для админов)
-/stats - Статистика (только для админов)
-/export - Экспорт данных (только для админов)
-/help - Эта справка
+🌍 **Калининград**
+📅 {date} | 🕐 {time}
 
-📝 Для создания записи используйте кнопки в меню.
+⚓ **336 ОБРМП**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 **КОМАНДЫ:**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔹 `/start` - Регистрация в системе
+🔹 `/profile` - Ваш профиль и записи
+🔹 `/admin` - Админ-панель
+🔹 `/stats` - Статистика
+🔹 `/export` - Экспорт данных
+🔹 `/help` - Эта справка
+
+📝 **Для создания записи используйте кнопки в меню**
+
+⚙️ **Техническая поддержка:**
+Обратитесь к администратору системы
     """
-    await message.answer(help_text)
+    await message.answer(help_text, parse_mode="Markdown")
 
 @router.callback_query(F.data == "main_menu")
 async def callback_main_menu(callback: CallbackQuery):
