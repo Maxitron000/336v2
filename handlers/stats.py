@@ -1,26 +1,48 @@
-# handlers/stats.py
-from aiogram import Router, types
+
+from aiogram import Router
+from aiogram.types import Message
 from aiogram.filters import Command
 from services.db_service import DBService
-from utils.localization import get_text
+from config import MAIN_ADMIN_ID
+import logging
 
 router = Router()
 
+async def is_admin(user_id: int) -> bool:
+    """Проверка прав администратора"""
+    if user_id == MAIN_ADMIN_ID:
+        return True
+    user = await DBService.get_user(user_id)
+    return user and user.get('is_admin', False)
+
 @router.message(Command("stats"))
-async def cmd_stats(message: types.Message):
-    stats = await DBService.get_statistics()
-    await message.answer(f"Статистика: {stats}")
+async def cmd_stats(message: Message):
+    """Показать статистику"""
+    try:
+        if not await is_admin(message.from_user.id):
+            await message.answer("❌ У вас нет прав администратора")
+            return
+        
+        stats = await DBService.get_statistics()
+        stats_text = f"""
+📊 Статистика системы:
+
+👥 Пользователей: {stats.get('users', 0)}
+        """
+        await message.answer(stats_text)
+    except Exception as e:
+        logging.error(f"Ошибка в cmd_stats: {e}")
+        await message.answer("Произошла ошибка. Попробуйте позже.")
 
 @router.message(Command("export"))
-async def cmd_export(message: types.Message):
-    file_path = await DBService.export_to_excel()
-    await message.answer_document(types.FSInputFile(file_path))
-
-@router.message(Command("all_journal"))
-async def cmd_all_journal(message: types.Message):
-    records = await DBService.get_all_records(days=30)
-    if not records:
-        await message.answer("Нет записей за последние 30 дней.")
-        return
-    text = "\n".join([f"{r['timestamp']}: {r['action']} — {r['location']} (user_id={r['user_id']})" for r in records[:20]])
-    await message.answer(f"Журнал за 30 дней (первые 20):\n{text}")
+async def cmd_export(message: Message):
+    """Экспорт данных"""
+    try:
+        if not await is_admin(message.from_user.id):
+            await message.answer("❌ У вас нет прав администратора")
+            return
+        
+        await message.answer("📊 Функция экспорта будет реализована позже")
+    except Exception as e:
+        logging.error(f"Ошибка в cmd_export: {e}")
+        await message.answer("Произошла ошибка. Попробуйте позже.")
