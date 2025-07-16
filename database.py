@@ -573,3 +573,17 @@ class Database:
         except Exception as e:
             print(f"Ошибка обновления ФИО пользователя: {e}")
             return False
+
+    def remove_user(self, user_id: int) -> bool:
+        """Удалить пользователя по user_id"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM users WHERE id = ?', (user_id,))
+            cursor.execute('DELETE FROM records WHERE user_id = ?', (user_id,))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Ошибка удаления пользователя: {e}")
+            return False

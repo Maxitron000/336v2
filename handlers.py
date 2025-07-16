@@ -328,6 +328,33 @@ class Handlers:
                 reply_markup=get_back_keyboard("admin_personnel")
             )
             return
+        elif data.startswith("removesoldier_"):
+            soldier_id = int(data.split("_")[1])
+            self.user_states[user_id] = {"state": "confirm_remove_soldier", "soldier_id": soldier_id}
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton("✅ Да, удалить", callback_data="removesoldier_confirm")],
+                [InlineKeyboardButton("❌ Нет, отмена", callback_data="admin_personnel")]
+            ]
+            soldier = self.db.get_user(soldier_id)
+            await query.edit_message_text(
+                f"Вы уверены, что хотите удалить бойца: {soldier['full_name']}?",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        elif data == "removesoldier_confirm":
+            state = self.user_states.get(user_id, {})
+            soldier_id = state.get("soldier_id")
+            if not soldier_id:
+                await query.edit_message_text("Ошибка: не выбран боец.", reply_markup=get_back_keyboard("admin_personnel"))
+                return
+            if self.db.remove_user(soldier_id):
+                await query.edit_message_text("✅ Боец успешно удалён.", reply_markup=get_back_keyboard("admin_personnel"))
+            else:
+                await query.edit_message_text("❌ Ошибка при удалении бойца.", reply_markup=get_back_keyboard("admin_personnel"))
+            if user_id in self.user_states:
+                del self.user_states[user_id]
+            return
     
     async def show_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
                            is_admin: bool, query=None):
@@ -625,10 +652,22 @@ class Handlers:
 
     async def remove_soldier(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
         """Удаление бойца"""
-        text = "❌ Удаление бойца\n\n🔧 Функция в разработке"
-        
-        await query.edit_message_text(text, reply_markup=get_back_keyboard("admin_personnel"))
-    
+        # Получаем всех бойцов по алфавиту
+        soldiers, _, _ = self.db.get_users_list(page=1, per_page=10000)
+        if not soldiers:
+            await query.edit_message_text("Нет бойцов для удаления.", reply_markup=get_back_keyboard("admin_personnel"))
+            return
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        keyboard = [
+            [InlineKeyboardButton(f"{s['full_name']}", callback_data=f"removesoldier_{s['id']}")]
+            for s in soldiers
+        ]
+        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_personnel")])
+        await query.edit_message_text(
+            "❌ Выберите бойца для удаления:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
     async def export_journal_data(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
         """Экспорт данных журнала"""
         try:
