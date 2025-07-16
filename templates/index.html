@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>336 ОБРМП - Электронный табель</title>
+    <title>Рота В - Электронный Табель</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -329,10 +328,10 @@
             };
             const formatter = new Intl.DateTimeFormat('ru-RU', options);
             const parts = formatter.formatToParts(now);
-            
+
             const date = `${parts[0].value}.${parts[2].value}.${parts[4].value}`;
             const time = `${parts[6].value}:${parts[8].value}:${parts[10].value}`;
-            
+
             document.getElementById('currentTime').innerHTML = `
                 <i class="fas fa-clock"></i> ${date} | ${time} (Калининград)
             `;
@@ -341,10 +340,10 @@
         function loadData() {
             const refreshBtn = document.getElementById('refreshBtn');
             const icon = refreshBtn.querySelector('i');
-            
+
             refreshBtn.classList.add('loading');
             icon.classList.add('animate-spin');
-            
+
             fetch('/api/stats')
                 .then(response => response.json())
                 .then(data => {
@@ -372,10 +371,10 @@
         function updatePersonnel(data) {
             const presentList = document.getElementById('presentList');
             const absentList = document.getElementById('absentList');
-            
+
             presentList.innerHTML = '';
             absentList.innerHTML = '';
-            
+
             if (data.present.length === 0) {
                 presentList.innerHTML = `
                     <div style="text-align: center; color: #7f8c8d; padding: 2rem;">
@@ -398,7 +397,7 @@
                     `;
                 });
             }
-            
+
             if (data.absent.length === 0) {
                 absentList.innerHTML = `
                     <div style="text-align: center; color: #7f8c8d; padding: 2rem;">

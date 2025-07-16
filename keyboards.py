@@ -18,14 +18,19 @@ def get_location_keyboard(action: str) -> InlineKeyboardMarkup:
     """Клавиатура выбора локации"""
     keyboard = []
 
-    # Создаем кнопки для каждой локации
-    for location in LOCATIONS:
-        keyboard.append([
-            InlineKeyboardButton(
-                text=location, 
-                callback_data=f"location_{action}_{location}"
-            )
-        ])
+    # Создаем кнопки для каждой локации в 2 столбца
+    for i in range(0, len(LOCATIONS), 2):
+        row = []
+        row.append(InlineKeyboardButton(
+            text=LOCATIONS[i], 
+            callback_data=f"location_{action}_{LOCATIONS[i]}"
+        ))
+        if i + 1 < len(LOCATIONS):
+            row.append(InlineKeyboardButton(
+                text=LOCATIONS[i + 1], 
+                callback_data=f"location_{action}_{LOCATIONS[i + 1]}"
+            ))
+        keyboard.append(row)
 
     # Кнопка возврата
     keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")])
@@ -182,10 +187,12 @@ from config import LOCATIONS
 
 def get_main_menu_keyboard(is_admin=False):
     """Главное меню"""
+    from config import EMOJI_LEFT, EMOJI_ARRIVED
+    
     keyboard = [
         [
-            InlineKeyboardButton(text="🚶 Убыл", callback_data="action_leave"),
-            InlineKeyboardButton(text="🏠 Прибыл", callback_data="action_arrive")
+            InlineKeyboardButton(text=f"{EMOJI_LEFT} Убыл", callback_data="action_leave"),
+            InlineKeyboardButton(text=f"{EMOJI_ARRIVED} Прибыл", callback_data="action_arrive")
         ],
         [
             InlineKeyboardButton(text="📋 Мой журнал", callback_data="show_journal")
@@ -212,12 +219,14 @@ def get_admin_main_keyboard(is_main_admin=False):
     ]
 
     if is_main_admin:
-        keyboard.append([
-            InlineKeyboardButton(text="👑 Управление админами", callback_data="admin_manage"),
-            InlineKeyboardButton(text="⚙️ Настройки", callback_data="admin_settings")
-        ])
-        keyboard.append([
-            InlineKeyboardButton(text="🗑️ Опасная зона", callback_data="admin_danger")
+        keyboard.extend([
+            [
+                InlineKeyboardButton(text="👑 Управление админами", callback_data="admin_manage"),
+                InlineKeyboardButton(text="⚙️ Настройки", callback_data="admin_settings")
+            ],
+            [
+                InlineKeyboardButton(text="🗑️ Опасная зона", callback_data="admin_danger")
+            ]
         ])
 
     keyboard.append([
