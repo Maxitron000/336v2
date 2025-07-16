@@ -300,6 +300,33 @@ class Database:
         
         return EXPORT_FILENAME
     
+    def export_to_excel_with_filters(self, start, end, soldier=None, location=None, action=None) -> str:
+        """Экспорт отфильтрованных данных в Excel"""
+        records = self.get_all_records_by_period(start, end, soldier, location, action)
+        if not records:
+            return None
+        import pandas as pd
+        import openpyxl
+        df = pd.DataFrame(records)
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df = df.sort_values('timestamp', ascending=False)
+        from config import EXPORT_FILENAME
+        with pd.ExcelWriter(EXPORT_FILENAME, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Записи', index=False)
+            workbook = writer.book
+            worksheet = writer.sheets['Записи']
+            for row in range(2, len(df) + 2):
+                action_val = worksheet.cell(row=row, column=3).value
+                if action_val == 'убыл':
+                    worksheet.cell(row=row, column=3).fill = openpyxl.styles.PatternFill(
+                        start_color='FF0000', end_color='FF0000', fill_type='solid'
+                    )
+                elif action_val == 'прибыл':
+                    worksheet.cell(row=row, column=3).fill = openpyxl.styles.PatternFill(
+                        start_color='00FF00', end_color='00FF00', fill_type='solid'
+                    )
+        return EXPORT_FILENAME
+    
     def cleanup_old_records(self, months: int = 6):
         """Очистка старых записей (старше 6 месяцев)"""
         conn = sqlite3.connect(self.db_name)

@@ -546,6 +546,49 @@ class Handlers:
                 del self.user_states[user_id]['journal_custom_end_date']
             await self.show_journal_management(update, context, query)
             return
+        elif data == "journal_export_filtered":
+            filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+            from datetime import datetime, timedelta
+            now = datetime.now()
+            period = filters.get('period', 'Месяц')
+            if period == 'Сегодня':
+                start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                end = now
+            elif period == 'Вчера':
+                start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+                end = start.replace(hour=23, minute=59, second=59, microsecond=999999)
+            elif period == 'Неделя':
+                start = now - timedelta(days=7)
+                end = now
+            elif period == 'Месяц':
+                start = now - timedelta(days=30)
+                end = now
+            else:
+                start = now - timedelta(days=30)
+                end = now
+            filename = self.db.export_to_excel_with_filters(
+                start, end,
+                soldier=filters.get('soldier'),
+                location=filters.get('location'),
+                action=filters.get('action')
+            )
+            if filename:
+                with open(filename, 'rb') as file:
+                    await context.bot.send_document(
+                        chat_id=update.effective_chat.id,
+                        document=file,
+                        caption="📤 Экспорт журнала с фильтрами"
+                    )
+                await query.edit_message_text(
+                    "✅ Экспорт журнала с фильтрами выполнен!",
+                    reply_markup=get_back_keyboard("admin_journal")
+                )
+            else:
+                await query.edit_message_text(
+                    "❌ Нет данных для экспорта по выбранным фильтрам.",
+                    reply_markup=get_back_keyboard("admin_journal")
+                )
+            return
         else:
             await query.edit_message_text(
                 "Функция в разработке или недоступна.",
