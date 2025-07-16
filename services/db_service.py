@@ -1,4 +1,3 @@
-
 import aiosqlite
 from config import DB_NAME
 import logging
@@ -39,11 +38,18 @@ class DBService:
         try:
             async with aiosqlite.connect(DB_NAME) as db:
                 async with db.execute("SELECT COUNT(*) FROM users") as cursor:
-                    row = await cursor.fetchone()
-                    return {"users": row[0] if row else 0}
+                    users_count = (await cursor.fetchone())[0]
+
+                async with db.execute("SELECT COUNT(*) FROM records") as cursor:
+                    records_count = (await cursor.fetchone())[0]
+
+                return {
+                    'users': users_count,
+                    'records': records_count
+                }
         except Exception as e:
             logging.error(f"Ошибка получения статистики: {e}")
-            return {"users": 0}
+            return {'users': 0, 'records': 0}
 
     @staticmethod
     async def add_record(user_id: int, action: str, location: str, comment: str = None):
@@ -112,3 +118,61 @@ class DBService:
         """Экспорт в Excel"""
         # TODO: Реализовать экспорт в Excel асинхронно
         return "export.xlsx"
+
+    @staticmethod
+    async def get_all_users():
+        """Получить всех пользователей"""
+        try:
+            async with aiosqlite.connect(DB_NAME) as db:
+                async with db.execute("""
+                    SELECT id, username, full_name, is_admin, created_at
+                    FROM users
+                    ORDER BY created_at DESC
+                """) as cursor:
+                    rows = await cursor.fetchall()
+
+                users = []
+                for row in rows:
+                    users.append({
+                        'id': row[0],
+                        'username': row[1],
+                        'full_name': row[2],
+                        'is_admin': bool(row[3]),
+                        'created_at': row[4]
+                    })
+
+                return users
+        except Exception as e:
+            logging.error(f"Ошибка получения пользователей: {e}")
+            return []
+
+    @staticmethod
+    async def get_all_records_with_names(limit=50):
+        """Получить все записи"""
+        try:
+            async with aiosqlite.connect(DB_NAME) as db:
+                async with db.execute("""
+                    SELECT r.id, r.user_id, r.action, r.location, r.timestamp,
+                           u.full_name
+                    FROM records r
+                    JOIN users u ON r.user_id = u.id
+                    ORDER BY r.timestamp DESC
+                    LIMIT ?
+                """, (limit,)) as cursor:
+                    rows = await cursor.fetchall()
+
+                records = []
+                for row in rows:
+                    records.append({
+                        'id': row[0],
+                        'user_id': row[1],
+                        'action': row[2],
+                        'location': row[3],
+                        'timestamp': row[4],
+                        'full_name': row[5]
+                    })
+
+                return records
+        except Exception as e:
+            logging.error(f"Ошибка получения записей: {e}")
+            return []
