@@ -186,22 +186,31 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from config import LOCATIONS
 
 def get_main_menu_keyboard(is_admin=False):
-    """Главное меню"""
-    from config import EMOJI_LEFT, EMOJI_ARRIVED
-    
+    """Главное меню с кнопками и текущим временем"""
+    import pytz
+    from datetime import datetime
+
+    # Калининградское время
+    kld_tz = pytz.timezone('Europe/Kaliningrad')
+    current_time = datetime.now(kld_tz).strftime('%H:%M:%S')
+
     keyboard = [
         [
-            InlineKeyboardButton(text=f"{EMOJI_LEFT} Убыл", callback_data="action_leave"),
-            InlineKeyboardButton(text=f"{EMOJI_ARRIVED} Прибыл", callback_data="action_arrive")
+            InlineKeyboardButton(f"✅ Прибыл", callback_data="action_arrive"),
+            InlineKeyboardButton(f"❌ Убыл", callback_data="action_leave")
         ],
         [
-            InlineKeyboardButton(text="📋 Мой журнал", callback_data="show_journal")
+            InlineKeyboardButton("📋 Мой журнал", callback_data="show_journal"),
+            InlineKeyboardButton("👤 Профиль", callback_data="profile")
+        ],
+        [
+            InlineKeyboardButton(f"🕐 {current_time} (Калининград)", callback_data="refresh_time")
         ]
     ]
 
     if is_admin:
         keyboard.append([
-            InlineKeyboardButton(text="🛡️ Админ-панель", callback_data="admin_panel")
+            InlineKeyboardButton("🛡️ Админ-панель", callback_data="admin_panel")
         ])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)

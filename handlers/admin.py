@@ -71,7 +71,7 @@ async def callback_admin_summary(callback: CallbackQuery):
         # Формируем красивый текст
         text = f"""
 📊 **БЫСТРАЯ СВОДКА**
-🏛️ *336 инженерно-маскировочный батальон*
+🏛️ *Рота "В"*
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 🕐 **{datetime.now(KALININGRAD_TZ).strftime('%d.%m.%Y %H:%M')}**
@@ -187,7 +187,7 @@ async def callback_admin_panel(callback: CallbackQuery, state: FSMContext):
 
         admin_text = f"""
 🛡️ **АДМИН-ПАНЕЛЬ**
-🏛️ *336 инженерно-маскировочный батальон*
+🏛️ *Рота "В"*
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 **ОПЕРАТИВНАЯ СВОДКА**
@@ -842,7 +842,8 @@ async def create_excel_export(records):
 
         for idx, record in enumerate(sorted_records, 1):
             dt = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
-            kld_time = dt.astimezone(KALININGRAD_TZ)
+            kld_time = dt.astime```python
+zone(KALININGRAD_TZ)
 
             row_data = [
                 idx,
@@ -872,7 +873,7 @@ async def create_excel_export(records):
         ws.insert_rows(1)
         ws.merge_cells('A1:F1')
         title_cell = ws['A1']
-        title_cell.value = f"ЖУРНАЛ ВЫХОДА В ГОРОД - 336 инженерно-маскировочный батальон ({datetime.now(KALININGRAD_TZ).strftime('%d.%m.%Y')})"
+        title_cell.value = f"ЖУРНАЛ ВЫХОДА В ГОРОД - Рота \"В\" ({datetime.now(KALININGRAD_TZ).strftime('%d.%m.%Y')})"
         title_cell.font = Font(bold=True, size=14)
         title_cell.alignment = Alignment(horizontal="center")
 
@@ -884,3 +885,125 @@ async def create_excel_export(records):
     except Exception as e:
         logging.error(f"Ошибка создания Excel: {e}")
         return None
+
+from aiogram import Bot
+from config import BOT_TOKEN
+
+async def get_me():
+    bot = Bot(BOT_TOKEN)
+    me = await bot.get_me()
+    print(f"Hello! I'm {me.first_name}")
+    print(f"My username is: @{me.username}")
+    await bot.close()
+# The following code should be placed at the end of the file
+
+@router.callback_query(F.data == "admin_panel")
+async def callback_admin_panel(callback: CallbackQuery, state: FSMContext):
+    """Главная админ-панель"""
+    try:
+        if not await is_admin(callback.from_user.id):
+            await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+            return
+
+        await state.clear()
+
+        # Получаем статистику для превью
+        users = await DBService.get_all_users()
+        soldiers = [u for u in users if not u.get('is_admin', False)]
+        admins = [u for u in users if u.get('is_admin', False)]
+
+        # Подсчет статуса
+        present = 0
+        absent = 0
+        for soldier in soldiers:
+            records = await DBService.get_user_records(soldier['id'], 1)
+            if records and records[0]['action'] == 'прибыл':
+                present += 1
+            else:
+                absent += 1
+
+        # Статистика за сегодня
+        today = datetime.now(KALININGRAD_TZ).date()
+        today_records = await DBService.get_records_by_date(today)
+
+        def get_admin_panel_text():
+            now = datetime.now(KALININGRAD_TZ)
+            return f"""
+🛡️ **АДМИН-ПАНЕЛЬ**
+🏛️ *Рота "В"*
+
+━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 **ОПЕРАТИВНАЯ СВОДКА**
+━━━━━━━━━━━━━━━━━━━━━━━━━
+
+👥 **Личный состав:** {len(soldiers)} чел.
+┣ 🏠 На месте: **{present}** чел.
+┗ 🚶 Убыли: **{absent}** чел.
+
+👨‍💼 **Администраторов:** {len(admins)} чел.
+
+📝 **Активность за сегодня:** {len(today_records)} записей
+
+🕐 **Время обновления:** {now.strftime('%H:%M')}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━
+⚡ **СИСТЕМА УПРАВЛЕНИЯ**
+        """
+
+        await callback.message.edit_text(
+            get_admin_panel_text(),
+            reply_markup=get_admin_main_keyboard(await is_main_admin(callback.from_user.id)),
+            parse_mode='Markdown'
+        )
+        await callback.answer()
+    except Exception as e:
+        logging.error(f"Ошибка в callback_admin_panel: {e}")
+        await callback.answer("❌ Произошла ошибка")
+
+async def check_duplicate_status(user_id: int, action: str) -> bool:
+    """Проверяет, не выбран ли один и тот же статус дважды подряд"""
+    records = await DBService.get_user_records(user_id, 1)
+    if records and records[0]['action'] == action:
+        return True
+    return False
+
+from aiogram import types
+
+@router.message(Command("start"))
+async def start_command(message: types.Message):
+    user_id = message.from_user.id
+    full_name = message.from_user.full_name
+    username = message.from_user.username
+    logging.info(f"New user: {user_id}, {full_name}, @{username}")
+    await DBService.add_user(user_id, full_name)
+    await message.reply(f"Привет, {full_name}!\n\nТвой ID: {user_id}")
+
+@router.callback_query(F.data.in_({"arrive", "leave"}))
+async def arrive_leave(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    action = callback.data
+
+    # Проверка на дубликат статуса
+    if await check_duplicate_status(user_id, action):
+        await callback.answer("❌ Вы уже отметили этот статус!", show_alert=True)
+        return
+
+    location = LOCATIONS.get("main", "main")  # Получаем локацию
+    timestamp = datetime.now(KALININGRAD_TZ).isoformat()
+    await DBService.add_record(user_id, action, location, timestamp)
+    await callback.answer(f"Вы отметили {action} в {datetime.now(KALININGRAD_TZ).strftime('%H:%M')}")
+
+    # Обновляем сообщение
+    user = await DBService.get_user(user_id)
+    arrive_leave_text = f"""
+Привет, {user['full_name']}!
+
+Вы отметили: {action}
+Местоположение: {location}
+Время: {datetime.now(KALININGRAD_TZ).strftime('%H:%M')}
+"""
+    await callback.message.edit_text(arrive_leave_text)
+
+@router.message()
+async def echo(message: types.Message):
+    await message.answer(message.text)

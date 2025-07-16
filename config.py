@@ -9,7 +9,7 @@ MAIN_ADMIN_ID = int(os.getenv('MAIN_ADMIN_ID', 0))  # ID главного адм
 
 # Основные настройки
 BOT_NAME = "Рота В - Электронный Табель"
-UNIT_NAME = "Рота В"
+UNIT_NAME = "Рота \"В\""
 
 # Эмодзи для кнопок
 EMOJI_ARRIVED = "✅"

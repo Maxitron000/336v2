@@ -1,4 +1,3 @@
-
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Command, StateFilter
@@ -33,7 +32,7 @@ def get_welcome_preview():
     """Создать красивую превью для приветствия"""
     time = get_kaliningrad_time()
     date = get_kaliningrad_date()
-    
+
     preview = f"""
 🏛️ **СИСТЕМА ВОЕННОГО ТАБЕЛЯ**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -42,7 +41,7 @@ def get_welcome_preview():
 📅 Дата: {date}
 🕐 Время: {time}
 
-⚓ **Рота В**
+⚓ **Рота "В"**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 🔐 **Система готова к работе**
@@ -59,7 +58,7 @@ async def cmd_start(message: Message, state: FSMContext):
             is_admin = user['is_admin'] or message.from_user.id == MAIN_ADMIN_ID
             time = get_kaliningrad_time()
             date = get_kaliningrad_date()
-            
+
             welcome_text = f"""
 🏛️ **СИСТЕМА ВОЕННОГО ТАБЕЛЯ**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -67,7 +66,7 @@ async def cmd_start(message: Message, state: FSMContext):
 🌍 **Калининград**
 📅 {date} | 🕐 {time}
 
-⚓ **Рота В**
+⚓ **Рота "В"**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 👋 **Добро пожаловать, {user['full_name']}!**
@@ -75,7 +74,7 @@ async def cmd_start(message: Message, state: FSMContext):
 
 📋 Выберите действие:
             """
-            
+
             await message.answer(
                 welcome_text,
                 reply_markup=get_main_menu_keyboard(is_admin),
@@ -104,7 +103,7 @@ async def process_name(message: Message, state: FSMContext):
     """Обработка ввода имени при регистрации"""
     try:
         full_name = message.text.strip()
-        
+
         # Защита от дурака - валидация ФИО
         if len(full_name) < 5:
             await message.answer(
@@ -116,7 +115,7 @@ async def process_name(message: Message, state: FSMContext):
                 parse_mode="Markdown"
             )
             return
-        
+
         # Проверка на бессмысленные строки
         if full_name.lower() in ['аaa', '123', 'ааа', 'test', 'тест', '...', 'abc']:
             await message.answer(
@@ -128,7 +127,7 @@ async def process_name(message: Message, state: FSMContext):
                 parse_mode="Markdown"
             )
             return
-        
+
         # Проверка на минимум две части (фамилия и инициалы)
         parts = full_name.split()
         if len(parts) < 2:
@@ -141,17 +140,17 @@ async def process_name(message: Message, state: FSMContext):
                 parse_mode="Markdown"
             )
             return
-        
+
         success = await DBService.add_user(
             message.from_user.id,
             message.from_user.username or "",
             full_name
         )
-        
+
         if success:
             time = get_kaliningrad_time()
             date = get_kaliningrad_date()
-            
+
             success_text = f"""
 ✅ **РЕГИСТРАЦИЯ ЗАВЕРШЕНА**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -160,13 +159,13 @@ async def process_name(message: Message, state: FSMContext):
 🆔 ID: {message.from_user.id}
 📅 {date} | 🕐 {time}
 
-⚓ **Рота В**
+⚓ **Рота "В"**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 🎯 **Система готова к работе!**
 📋 Выберите действие:
             """
-            
+
             await message.answer(
                 success_text,
                 reply_markup=get_main_menu_keyboard(False),
@@ -193,16 +192,16 @@ async def cmd_profile(message: Message):
             await message.delete()
         except:
             pass
-            
+
         user = await DBService.get_user(message.from_user.id)
         if not user:
             await message.answer("Вы не зарегистрированы. Используйте /start")
             return
-        
+
         records = await DBService.get_user_records(message.from_user.id, 5)
         time = get_kaliningrad_time()
         date = get_kaliningrad_date()
-        
+
         # Определяем текущий статус
         current_status = "❓ Статус неизвестен"
         if records:
@@ -211,7 +210,7 @@ async def cmd_profile(message: Message):
                 current_status = f"🏠 **В ЧАСТИ** ({last_record['location']})"
             else:
                 current_status = f"🚶 **НЕ В ЧАСТИ** ({last_record['location']})"
-        
+
         profile_text = f"""
 👤 **ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -219,7 +218,7 @@ async def cmd_profile(message: Message):
 🌍 **Калининград**
 📅 {date} | 🕐 {time}
 
-⚓ **Рота В**
+⚓ **Рота "В"**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 👤 **{user['full_name']}**
@@ -232,7 +231,7 @@ async def cmd_profile(message: Message):
 📋 **ПОСЛЕДНИЕ ЗАПИСИ:**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         """
-        
+
         if records:
             for record in records:
                 action_emoji = "🏠" if record['action'] == 'прибыл' else "🚶"
@@ -241,7 +240,7 @@ async def cmd_profile(message: Message):
                 profile_text += f"\n   ⏰ {time_formatted}\n"
         else:
             profile_text += "\n📝 Записей пока нет"
-        
+
         await message.answer(
             profile_text, 
             parse_mode="Markdown",
@@ -268,7 +267,7 @@ async def cmd_help(message: Message):
     """Показать справку"""
     time = get_kaliningrad_time()
     date = get_kaliningrad_date()
-    
+
     help_text = f"""
 🆘 **СПРАВКА ПО СИСТЕМЕ**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -276,7 +275,7 @@ async def cmd_help(message: Message):
 🌍 **Калининград**
 📅 {date} | 🕐 {time}
 
-⚓ **Рота В**
+⚓ **Рота "В"**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 📋 **КОМАНДЫ:**
@@ -304,7 +303,7 @@ async def callback_main_menu(callback: CallbackQuery):
         if not user:
             await callback.answer("Сначала зарегистрируйтесь командой /start")
             return
-        
+
         is_admin = user['is_admin'] or callback.from_user.id == MAIN_ADMIN_ID
         await callback.message.edit_text(
             "Выберите действие:",
@@ -320,7 +319,7 @@ async def callback_action(callback: CallbackQuery):
     try:
         action = callback.data.split("_")[1]
         action_text = "убыл" if action == "leave" else "прибыл"
-        
+
         await callback.message.edit_text(
             f"Вы выбрали: {action_text}\n"
             "Выберите локацию:",
@@ -337,19 +336,19 @@ async def callback_location(callback: CallbackQuery):
         data_parts = callback.data.split("_", 2)
         action = data_parts[1]
         location = data_parts[2]
-        
+
         action_text = "убыл" if action == "leave" else "прибыл"
-        
+
         success = await DBService.add_record(
             callback.from_user.id,
             action_text,
             location
         )
-        
+
         if success:
             user = await DBService.get_user(callback.from_user.id)
             is_admin = user['is_admin'] or callback.from_user.id == MAIN_ADMIN_ID
-            
+
             await callback.message.edit_text(
                 f"✅ Запись добавлена!\n"
                 f"🚶 {action_text} - {location}\n"
@@ -370,7 +369,7 @@ async def callback_show_journal(callback: CallbackQuery):
     """Показать журнал пользователя"""
     try:
         records = await DBService.get_user_records(callback.from_user.id, 5)
-        
+
         if not records:
             text = "📋 Ваш журнал пуст.\nУ вас пока нет записей."
         else:
@@ -379,7 +378,7 @@ async def callback_show_journal(callback: CallbackQuery):
                 action_emoji = "🚶" if record['action'] == 'убыл' else "🏠"
                 text += f"{action_emoji} {record['action']} - {record['location']}\n"
                 text += f"🕒 {record['timestamp']}\n\n"
-        
+
         await callback.message.edit_text(
             text,
             reply_markup=get_back_keyboard()
