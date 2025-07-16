@@ -25,7 +25,8 @@ class Database:
                 status TEXT DEFAULT 'в_части',
                 last_location TEXT,
                 last_status_change TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                settings TEXT DEFAULT "{}"
             )
         ''')
         
@@ -42,6 +43,11 @@ class Database:
         
         try:
             cursor.execute('ALTER TABLE users ADD COLUMN last_status_change TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+        except:
+            pass  # Колонка уже существует
+        
+        try:
+            cursor.execute('ALTER TABLE users ADD COLUMN settings TEXT DEFAULT "{}"')
         except:
             pass  # Колонка уже существует
         
@@ -187,22 +193,23 @@ class Database:
             for row in results
         ]
     
-    def get_all_records(self, days: int = 30) -> List[Dict]:
+    def get_all_records(self, days: int = 30, order_by_time_only: bool = False) -> List[Dict]:
         """Получение всех записей за период"""
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
-        
-        cursor.execute('''
+        if order_by_time_only:
+            order = 'r.timestamp DESC'
+        else:
+            order = 'u.full_name, r.timestamp DESC'
+        cursor.execute(f'''
             SELECT r.id, u.full_name, r.action, r.location, r.timestamp, r.comment
             FROM records r
             JOIN users u ON r.user_id = u.id
-            WHERE r.timestamp >= datetime('now', '-{} days')
-            ORDER BY r.timestamp DESC
-        '''.format(days))
-        
+            WHERE r.timestamp >= datetime('now', '-{days} days')
+            ORDER BY {order}
+        ''')
         results = cursor.fetchall()
         conn.close()
-        
         return [
             {
                 'id': row[0],
@@ -262,7 +269,7 @@ class Database:
     
     def export_to_excel(self, days: int = 30) -> str:
         """Экспорт данных в Excel"""
-        records = self.get_all_records(days)
+        records = self.get_all_records(days, order_by_time_only=True)
         
         if not records:
             return None
@@ -291,6 +298,33 @@ class Database:
                         start_color='00FF00', end_color='00FF00', fill_type='solid'
                     )
         
+        return EXPORT_FILENAME
+    
+    def export_to_excel_with_filters(self, start, end, soldier=None, location=None, action=None) -> str:
+        """Экспорт отфильтрованных данных в Excel"""
+        records = self.get_all_records_by_period(start, end, soldier, location, action)
+        if not records:
+            return None
+        import pandas as pd
+        import openpyxl
+        df = pd.DataFrame(records)
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df = df.sort_values('timestamp', ascending=False)
+        from config import EXPORT_FILENAME
+        with pd.ExcelWriter(EXPORT_FILENAME, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Записи', index=False)
+            workbook = writer.book
+            worksheet = writer.sheets['Записи']
+            for row in range(2, len(df) + 2):
+                action_val = worksheet.cell(row=row, column=3).value
+                if action_val == 'убыл':
+                    worksheet.cell(row=row, column=3).fill = openpyxl.styles.PatternFill(
+                        start_color='FF0000', end_color='FF0000', fill_type='solid'
+                    )
+                elif action_val == 'прибыл':
+                    worksheet.cell(row=row, column=3).fill = openpyxl.styles.PatternFill(
+                        start_color='00FF00', end_color='00FF00', fill_type='solid'
+                    )
         return EXPORT_FILENAME
     
     def cleanup_old_records(self, months: int = 6):
@@ -524,3 +558,104 @@ class Database:
         total_pages = (total_users + per_page - 1) // per_page
         
         return users, page, total_pages
+
+    def get_user_settings(self, user_id: int) -> dict:
+        """Получить индивидуальные настройки пользователя (dict)"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        cursor.execute('SELECT settings FROM users WHERE id = ?', (user_id,))
+        result = cursor.fetchone()
+        conn.close()
+        if result and result[0]:
+            import json
+            try:
+                return json.loads(result[0])
+            except Exception:
+                return {}
+        return {}
+
+    def set_user_settings(self, user_id: int, settings: dict) -> bool:
+        """Сохранить индивидуальные настройки пользователя (dict)"""
+        import json
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            cursor.execute('UPDATE users SET settings = ? WHERE id = ?', (json.dumps(settings), user_id))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Ошибка сохранения настроек пользователя: {e}")
+            return False
+
+    def update_user_full_name(self, user_id: int, new_full_name: str) -> bool:
+        """Обновить ФИО пользователя по user_id"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            cursor.execute('UPDATE users SET full_name = ? WHERE id = ?', (new_full_name, user_id))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Ошибка обновления ФИО пользователя: {e}")
+            return False
+
+    def remove_user(self, user_id: int) -> bool:
+        """Удалить пользователя по user_id"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM users WHERE id = ?', (user_id,))
+            cursor.execute('DELETE FROM records WHERE user_id = ?', (user_id,))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Ошибка удаления пользователя: {e}")
+            return False
+
+    def get_all_locations(self) -> list:
+        """Получить список всех уникальных локаций"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        cursor.execute('SELECT DISTINCT location FROM records ORDER BY location')
+        results = cursor.fetchall()
+        conn.close()
+        return [row[0] for row in results]
+
+    # Фильтрованный выбор записей по периоду и фильтрам
+    def get_all_records_by_period(self, start, end, soldier=None, location=None, action=None) -> list:
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        query = '''
+            SELECT r.id, u.full_name, r.action, r.location, r.timestamp, r.comment
+            FROM records r
+            JOIN users u ON r.user_id = u.id
+            WHERE r.timestamp >= ? AND r.timestamp <= ?
+        '''
+        params = [start.isoformat(), end.isoformat()]
+        if soldier:
+            query += ' AND u.full_name = ?'
+            params.append(soldier)
+        if location:
+            query += ' AND r.location = ?'
+            params.append(location)
+        if action:
+            query += ' AND r.action = ?'
+            params.append(action)
+        query += ' ORDER BY r.timestamp DESC'
+        cursor.execute(query, params)
+        results = cursor.fetchall()
+        conn.close()
+        return [
+            {
+                'id': row[0],
+                'full_name': row[1],
+                'action': row[2],
+                'location': row[3],
+                'timestamp': row[4],
+                'comment': row[5]
+            }
+            for row in results
+        ]
