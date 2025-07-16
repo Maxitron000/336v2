@@ -1,6 +1,8 @@
 { pkgs }: {
   deps = [
-    pkgs.python39
-    pkgs.python39Packages.pip
+    pkgs.python310Full
+    pkgs.python310Packages.pip
+    pkgs.python310Packages.setuptools
+    pkgs.python310Packages.wheel
   ];
 }

@@ -1,2 +1,2 @@
-run = "python main.py"
+run = "python3.10 main.py"
 language = "python3"
