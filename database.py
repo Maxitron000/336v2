@@ -25,7 +25,8 @@ class Database:
                 status TEXT DEFAULT 'в_части',
                 last_location TEXT,
                 last_status_change TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                settings TEXT DEFAULT "{}"
             )
         ''')
         
@@ -42,6 +43,11 @@ class Database:
         
         try:
             cursor.execute('ALTER TABLE users ADD COLUMN last_status_change TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+        except:
+            pass  # Колонка уже существует
+        
+        try:
+            cursor.execute('ALTER TABLE users ADD COLUMN settings TEXT DEFAULT "{}"')
         except:
             pass  # Колонка уже существует
         
@@ -524,3 +530,32 @@ class Database:
         total_pages = (total_users + per_page - 1) // per_page
         
         return users, page, total_pages
+
+    def get_user_settings(self, user_id: int) -> dict:
+        """Получить индивидуальные настройки пользователя (dict)"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        cursor.execute('SELECT settings FROM users WHERE id = ?', (user_id,))
+        result = cursor.fetchone()
+        conn.close()
+        if result and result[0]:
+            import json
+            try:
+                return json.loads(result[0])
+            except Exception:
+                return {}
+        return {}
+
+    def set_user_settings(self, user_id: int, settings: dict) -> bool:
+        """Сохранить индивидуальные настройки пользователя (dict)"""
+        import json
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            cursor.execute('UPDATE users SET settings = ? WHERE id = ?', (json.dumps(settings), user_id))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Ошибка сохранения настроек пользователя: {e}")
+            return False

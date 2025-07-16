@@ -167,3 +167,13 @@ def get_back_keyboard(callback_data: str = "main_menu") -> InlineKeyboardMarkup:
     """Простая клавиатура с кнопкой назад"""
     keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data=callback_data)]]
     return InlineKeyboardMarkup(keyboard)
+
+def get_general_settings_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура общих настроек пользователя"""
+    keyboard = [
+        [InlineKeyboardButton("🌐 Язык", callback_data="general_set_language")],
+        [InlineKeyboardButton("🕒 Часовой пояс", callback_data="general_set_timezone")],
+        [InlineKeyboardButton("⏳ Формат времени", callback_data="general_set_timeformat")],
+        [InlineKeyboardButton("🔙 Назад", callback_data="admin_settings")]
+    ]
+    return InlineKeyboardMarkup(keyboard)

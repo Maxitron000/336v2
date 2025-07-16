@@ -164,7 +164,7 @@ class Handlers:
                 )
             
             is_admin = self.db.is_admin(user_id)
-            await self.show_main_menu(update, context, is_admin)
+            await self.show_main_menu(update, context, is_admin, query)
         else:
             await update.message.reply_text(
                 "Ошибка при добавлении записи. Попробуйте еще раз."
@@ -420,10 +420,21 @@ class Handlers:
         await query.edit_message_text(text, reply_markup=keyboard)
     
     async def show_general_settings(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
-        """Показать общие настройки"""
-        text = "⚙️ Общие настройки\n\n🔧 Функция в разработке"
-        
-        await query.edit_message_text(text, reply_markup=get_back_keyboard("admin_settings"))
+        """Показать общие настройки пользователя"""
+        user_id = update.effective_user.id
+        settings = self.db.get_user_settings(user_id)
+        lang = settings.get('language', 'ru')
+        tz = settings.get('timezone', 'Europe/Moscow')
+        tf = settings.get('timeformat', '24h')
+        text = (
+            f"⚙️ Общие настройки\n\n"
+            f"🌐 Язык: {lang}\n"
+            f"🕒 Часовой пояс: {tz}\n"
+            f"⏳ Формат времени: {tf}\n\n"
+            f"Выберите, что изменить:"
+        )
+        from keyboards import get_general_settings_keyboard
+        await query.edit_message_text(text, reply_markup=get_general_settings_keyboard())
     
     async def mark_all_arrived(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
         """Отметить всех прибывшими"""
