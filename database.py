@@ -587,3 +587,48 @@ class Database:
         except Exception as e:
             print(f"Ошибка удаления пользователя: {e}")
             return False
+
+    def get_all_locations(self) -> list:
+        """Получить список всех уникальных локаций"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        cursor.execute('SELECT DISTINCT location FROM records ORDER BY location')
+        results = cursor.fetchall()
+        conn.close()
+        return [row[0] for row in results]
+
+    # Фильтрованный выбор записей по периоду и фильтрам
+    def get_all_records_by_period(self, start, end, soldier=None, location=None, action=None) -> list:
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        query = '''
+            SELECT r.id, u.full_name, r.action, r.location, r.timestamp, r.comment
+            FROM records r
+            JOIN users u ON r.user_id = u.id
+            WHERE r.timestamp >= ? AND r.timestamp <= ?
+        '''
+        params = [start.isoformat(), end.isoformat()]
+        if soldier:
+            query += ' AND u.full_name = ?'
+            params.append(soldier)
+        if location:
+            query += ' AND r.location = ?'
+            params.append(location)
+        if action:
+            query += ' AND r.action = ?'
+            params.append(action)
+        query += ' ORDER BY r.timestamp DESC'
+        cursor.execute(query, params)
+        results = cursor.fetchall()
+        conn.close()
+        return [
+            {
+                'id': row[0],
+                'full_name': row[1],
+                'action': row[2],
+                'location': row[3],
+                'timestamp': row[4],
+                'comment': row[5]
+            }
+            for row in results
+        ]

@@ -428,6 +428,129 @@ class Handlers:
                 del self.user_states[user_id]['journal_filters']
             await self.show_journal_management(update, context, query)
             return
+        if data == "journal_filter_soldier":
+            # Список всех бойцов по алфавиту
+            soldiers, _, _ = self.db.get_users_list(page=1, per_page=10000)
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton(s['full_name'], callback_data=f"journal_filter_soldier_{s['id']}")]
+                for s in soldiers
+            ]
+            keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_journal")])
+            await query.edit_message_text(
+                "Выберите бойца:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        if data.startswith("journal_filter_soldier_"):
+            soldier_id = int(data.split("_")[3])
+            soldier = self.db.get_user(soldier_id)
+            filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+            filters['soldier'] = soldier['full_name']
+            self.user_states[user_id]['journal_filters'] = filters
+            await self.show_journal_management(update, context, query)
+            return
+        if data == "journal_filter_location":
+            # Список всех уникальных локаций
+            locations = self.db.get_all_locations()
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton(loc, callback_data=f"journal_filter_location_{loc}")]
+                for loc in locations
+            ]
+            keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_journal")])
+            await query.edit_message_text(
+                "Выберите локацию:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        if data.startswith("journal_filter_location_"):
+            location = data.split("_", 3)[3]
+            filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+            filters['location'] = location
+            self.user_states[user_id]['journal_filters'] = filters
+            await self.show_journal_management(update, context, query)
+            return
+        if data == "journal_filter_action":
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton("убыл", callback_data="journal_filter_action_убыл")],
+                [InlineKeyboardButton("прибыл", callback_data="journal_filter_action_прибыл")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_journal")]
+            ]
+            await query.edit_message_text(
+                "Выберите действие:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        if data.startswith("journal_filter_action_"):
+            action = data.split("_", 3)[3]
+            filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+            filters['action'] = action
+            self.user_states[user_id]['journal_filters'] = filters
+            await self.show_journal_management(update, context, query)
+            return
+        elif data == "journal_filter_custom_date":
+            await query.edit_message_text(
+                "Введите дату начала периода (например, 2023-10-27):",
+                reply_markup=get_back_keyboard("admin_journal")
+            )
+            self.user_states[user_id] = {"state": "waiting_for_journal_custom_start_date"}
+            return
+        elif data == "journal_filter_custom_end_date":
+            await query.edit_message_text(
+                "Введите дату окончания периода (например, 2023-10-28):",
+                reply_markup=get_back_keyboard("admin_journal")
+            )
+            self.user_states[user_id] = {"state": "waiting_for_journal_custom_end_date"}
+            return
+        elif data == "journal_filter_apply_custom":
+            start_date_str = self.user_states.get(user_id, {}).get('journal_custom_start_date')
+            end_date_str = self.user_states.get(user_id, {}).get('journal_custom_end_date')
+            
+            if not start_date_str or not end_date_str:
+                await query.edit_message_text(
+                    "Ошибка: даты не выбраны. Пожалуйста, выберите дату начала и окончания периода.",
+                    reply_markup=get_back_keyboard("admin_journal")
+                )
+                return
+            
+            try:
+                start_date = datetime.fromisoformat(start_date_str.replace('Z', '+00:00'))
+                end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
+                
+                if start_date > end_date:
+                    await query.edit_message_text(
+                        "Дата начала не может быть позже даты окончания. Пожалуйста, выберите корректные даты.",
+                        reply_markup=get_back_keyboard("admin_journal")
+                    )
+                    return
+                
+                filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+                filters['period'] = 'Выбрать даты'
+                filters['start_date'] = start_date.isoformat()
+                filters['end_date'] = end_date.isoformat()
+                self.user_states[user_id]['journal_filters'] = filters
+                await self.show_journal_management(update, context, query)
+                return
+            except ValueError:
+                await query.edit_message_text(
+                    "Неверный формат даты. Пожалуйста, введите дату в формате YYYY-MM-DD.",
+                    reply_markup=get_back_keyboard("admin_journal")
+                )
+                return
+        elif data == "journal_filter_clear_custom":
+            if user_id in self.user_states and 'journal_filters' in self.user_states[user_id]:
+                del self.user_states[user_id]['journal_filters']
+                del self.user_states[user_id]['journal_custom_start_date']
+                del self.user_states[user_id]['journal_custom_end_date']
+            await self.show_journal_management(update, context, query)
+            return
+        else:
+            await query.edit_message_text(
+                "Функция в разработке или недоступна.",
+                reply_markup=get_back_keyboard("admin_panel")
+            )
     
     async def show_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
                            is_admin: bool, query=None):
