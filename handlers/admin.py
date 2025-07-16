@@ -842,8 +842,7 @@ async def create_excel_export(records):
 
         for idx, record in enumerate(sorted_records, 1):
             dt = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
-            kld_time = dt.astime```python
-zone(KALININGRAD_TZ)
+            kld_time = dt.astimezone(KALININGRAD_TZ)
 
             row_data = [
                 idx,
