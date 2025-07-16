@@ -25,92 +25,34 @@ def index():
 
 @app.route('/api/stats')
 def api_stats():
-    """API для получения статистики"""
+    """API endpoint для получения статистики"""
     try:
-        # Используем синхронную версию для Flask
-        import aiosqlite
-        import sqlite3
+        # Используем синхронную версию
+        db = DBService()
+        stats = db.get_current_status()
 
-        # Подключение к базе данных
-        conn = sqlite3.connect('military_tracker.db')
-        cursor = conn.cursor()
+        # Форматируем время для записей
+        for category in ['present_list', 'absent_list']:
+            if category in stats:
+                for person in stats[category]:
+                    if 'last_update' in person:
+                        person['last_update'] = format_kaliningrad_time(person['last_update'])
 
-        # Получаем всех пользователей
-        cursor.execute("""
-            SELECT id, full_name, is_admin FROM users 
-            ORDER BY full_name
-        """)
-        users = cursor.fetchall()
-
-        soldiers = [(u[0], u[1]) for u in users if not u[2]]  # не админы
-        admins_count = len([u for u in users if u[2]])  # админы
-
-        present_list = []
-        absent_list = []
-
-        # Проверяем статус каждого бойца
-        for user_id, full_name in soldiers:
-            cursor.execute("""
-                SELECT action, location, timestamp FROM user_records 
-                WHERE user_id = ? 
-                ORDER BY timestamp DESC 
-                LIMIT 1
-            """, (user_id,))
-
-            record = cursor.fetchone()
-
-            if record:
-                action, location, timestamp = record
-                time_str = format_kaliningrad_time(timestamp)
-
-                person_data = {
-                    'name': full_name,
-                    'location': location,
-                    'time': time_str
-                }
-
-                if action == 'прибыл':
-                    present_list.append(person_data)
-                else:
-                    absent_list.append(person_data)
-            else:
-                # Нет записей - считаем отсутствующим
-                absent_list.append({
-                    'name': full_name,
-                    'location': 'Нет данных',
-                    'time': '—'
-                })
-
-        conn.close()
-
-        # Формируем ответ
-        stats = {
-            'present': len(present_list),
-            'absent': len(absent_list),
-            'total': len(soldiers),
-            'admins': admins_count,
-            'present_list': present_list,
-            'absent_list': absent_list,
-            'present_count': len(present_list),
-            'absent_count': len(absent_list),
-            'total_soldiers': len(soldiers),
-            'today_records': len(present_list) + len(absent_list),  # Примерное значение
-            'last_updated': datetime.now(KALININGRAD_TZ).strftime('%H:%M:%S')
-        }
+        # Добавляем timestamp для кэширования
+        stats['timestamp'] = datetime.now().isoformat()
 
         return jsonify(stats)
-
     except Exception as e:
         print(f"Ошибка API: {e}")
         return jsonify({
+            'error': str(e),
+            'total': 0,
             'present': 0,
             'absent': 0,
-            'total': 0,
-            'admins': 0,
+            'unknown': 0,
             'present_list': [],
-            'absent_list': [],
-            'error': str(e)
-        })
+            'absent_list': []
+        }), 500
 
 def run_flask():
     app.run(host='0.0.0.0', port=5000, debug=False)
