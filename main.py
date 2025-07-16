@@ -60,13 +60,24 @@ async def send_reminders(application):
         if now.hour == 19 and now.minute == 0:
             # Сводка для админов
             admins = db.get_all_admins()
-            # Получаем всех бойцов
             all_soldiers, _, _ = db.get_users_list(page=1, per_page=10000)
-            summary = "📋 Сводка по бойцам на 19:00:\n\n"
+            from datetime import datetime
+            out_list = []
+            in_list = []
             for user in all_soldiers:
-                status = "🏠 В части" if user['status'] == 'в_части' else "🚶 Вне части"
                 location = user['last_location'] or "-"
-                summary += f"{user['full_name']} — {status} (локация: {location})\n"
+                try:
+                    time_str = datetime.fromisoformat(user['last_status_change']).strftime('%H:%M') if user['last_status_change'] else "--:--"
+                except Exception:
+                    time_str = "--:--"
+                line = f"{user['full_name']} — {location} ({time_str})"
+                if user['status'] == 'вне_части':
+                    out_list.append(line)
+                else:
+                    in_list.append(line)
+            summary = "📋 Сводка по бойцам на 19:00:\n\n"
+            summary += "🚶 ВНЕ ЧАСТИ:\n" + ("\n".join(out_list) if out_list else "—") + "\n\n"
+            summary += "🏠 В ЧАСТИ:\n" + ("\n".join(in_list) if in_list else "—")
             for admin in admins:
                 try:
                     await application.bot.send_message(
