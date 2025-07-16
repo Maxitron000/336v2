@@ -84,6 +84,160 @@ class Handlers:
             await self.handle_custom_location(update, context)
         elif state == 'waiting_for_admin_id':
             await self.handle_admin_id_input(update, context)
+        elif state == 'waiting_for_new_name':
+            # Смена ФИО бойца
+            soldier_id = self.user_states[user_id]['soldier_id']
+            new_name = update.message.text.strip()
+            if not re.match(r'^[А-ЯЁ][а-яё]+ [А-ЯЁ]\.[А-ЯЁ]\.$', new_name):
+                await update.message.reply_text(
+                    "Неверный формат ФИО!\n\nПравильный формат: Фамилия И.О.\nПример: Иванов И.И.\n\nПопробуйте еще раз:")
+                return
+            if self.db.update_user_full_name(soldier_id, new_name):
+                await update.message.reply_text(f"✅ ФИО бойца успешно изменено на: {new_name}")
+            else:
+                await update.message.reply_text("❌ Ошибка при изменении ФИО. Попробуйте еще раз.")
+            del self.user_states[user_id]
+            is_admin = self.db.is_admin(user_id)
+            await self.show_main_menu(update, context, is_admin)
+        elif state == 'waiting_for_new_soldier_name':
+            # Запрос username после ФИО
+            new_name = update.message.text.strip()
+            if not re.match(r'^[А-ЯЁ][а-яё]+ [А-ЯЁ]\.[А-ЯЁ]\.$', new_name):
+                await update.message.reply_text(
+                    "Неверный формат ФИО!\n\nПравильный формат: Фамилия И.О.\nПример: Иванов И.И.\n\nПопробуйте еще раз:")
+                return
+            self.user_states[user_id] = {"state": "waiting_for_new_soldier_username", "new_name": new_name}
+            await update.message.reply_text(
+                "Введите username нового бойца (без @) или отправьте '-' для генерации временного:")
+            return
+        elif state == 'waiting_for_new_soldier_username':
+            new_name = self.user_states[user_id]['new_name']
+            username = update.message.text.strip()
+            if username == '-':
+                import random
+                username = f"user_{random.randint(100000,999999)}"
+            # Проверка на дублирование username
+            soldiers, _, _ = self.db.get_users_list(page=1, per_page=10000)
+            if any(s['username'] == username for s in soldiers):
+                await update.message.reply_text("Пользователь с таким username уже существует! Введите другой username:")
+                return
+            # Генерируем временный user_id (отрицательный, чтобы не пересекался с Telegram ID)
+            import random
+            temp_id = -random.randint(100000, 999999)
+            if self.db.add_user(temp_id, username, new_name):
+                await update.message.reply_text(f"✅ Новый боец добавлен!\nФИО: {new_name}\nusername: {username}")
+            else:
+                await update.message.reply_text("❌ Ошибка при добавлении бойца. Попробуйте еще раз.")
+            del self.user_states[user_id]
+            is_admin = self.db.is_admin(user_id)
+            await self.show_main_menu(update, context, is_admin)
+            return
+        elif state == 'waiting_for_new_soldier_tgid':
+            # Добавление по Telegram ID
+            tgid_text = update.message.text.strip()
+            try:
+                tgid = int(tgid_text)
+            except ValueError:
+                await update.message.reply_text("ID должен быть числом. Попробуйте еще раз:")
+                return
+            user = self.db.get_user(tgid)
+            if not user:
+                await update.message.reply_text("Пользователь с таким Telegram ID не найден. Убедитесь, что он написал /start боту.")
+                return
+            self.user_states[user_id] = {"state": "waiting_for_new_soldier_name_by_tgid", "tgid": tgid}
+            await update.message.reply_text(
+                "Введите ФИО для бойца в формате: Фамилия И.О.\n\nПример: Иванов И.И.")
+            return
+        elif state == 'waiting_for_new_soldier_name_by_tgid':
+            tgid = self.user_states[user_id]['tgid']
+            new_name = update.message.text.strip()
+            import re
+            if not re.match(r'^[А-ЯЁ][а-яё]+ [А-ЯЁ]\.[А-ЯЁ]\.$', new_name):
+                await update.message.reply_text(
+                    "Неверный формат ФИО!\n\nПравильный формат: Фамилия И.О.\nПример: Иванов И.И.\n\nПопробуйте еще раз:")
+                return
+            if self.db.update_user_full_name(tgid, new_name):
+                await update.message.reply_text(f"✅ ФИО бойца с Telegram ID {tgid} успешно установлено: {new_name}")
+            else:
+                await update.message.reply_text("❌ Ошибка при обновлении ФИО. Попробуйте еще раз.")
+            del self.user_states[user_id]
+            is_admin = self.db.is_admin(user_id)
+            await self.show_main_menu(update, context, is_admin)
+            return
+        elif state == 'waiting_for_time_soldiers':
+            time_str = update.message.text.strip()
+            import re
+            if not re.match(r'^([01]?\d|2[0-3]):[0-5]\d$', time_str):
+                await update.message.reply_text("Неверный формат времени! Введите в формате ЧЧ:ММ, например, 18:40:")
+                return
+            # Сохраняем глобально (в settings.json или в базе, если потребуется)
+            self.save_global_notification_time('soldiers', time_str)
+            await update.message.reply_text(f"✅ Время напоминания для бойцов установлено: {time_str}")
+            del self.user_states[user_id]
+            is_admin = self.db.is_admin(user_id)
+            await self.show_main_menu(update, context, is_admin)
+            return
+        elif state == 'waiting_for_time_admins':
+            time_str = update.message.text.strip()
+            import re
+            if not re.match(r'^([01]?\d|2[0-3]):[0-5]\d$', time_str):
+                await update.message.reply_text("Неверный формат времени! Введите в формате ЧЧ:ММ, например, 19:00:")
+                return
+            self.save_global_notification_time('admins', time_str)
+            await update.message.reply_text(f"✅ Время напоминания для админов установлено: {time_str}")
+            del self.user_states[user_id]
+            is_admin = self.db.is_admin(user_id)
+            await self.show_main_menu(update, context, is_admin)
+            return
+        elif state == 'waiting_for_personnel_name':
+            name = update.message.text.strip()
+            soldiers, _, _ = self.db.get_users_list(page=1, per_page=10000)
+            matches = [s for s in soldiers if name.lower() in s['full_name'].lower()]
+            if not matches:
+                await update.message.reply_text("Нет совпадений по ФИО. Попробуйте ещё раз:")
+                return
+            if len(matches) == 1:
+                filters = self.user_states.get(user_id, {}).get('personnel_filters', {})
+                filters['name'] = matches[0]['full_name']
+                self.user_states[user_id]['personnel_filters'] = filters
+                del self.user_states[user_id]['state']
+                await self.show_personnel_management(update, context, None)
+                return
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton(s['full_name'], callback_data=f"personnel_name_exact_{s['id']}")]
+                for s in matches[:10]
+            ]
+            await update.message.reply_text(
+                "Выберите бойца:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        # Живой поиск по ФИО в журнале
+        elif state == 'waiting_for_journal_soldier_name':
+            name = update.message.text.strip()
+            soldiers, _, _ = self.db.get_users_list(page=1, per_page=10000)
+            matches = [s for s in soldiers if name.lower() in s['full_name'].lower()]
+            if not matches:
+                await update.message.reply_text("Нет совпадений по ФИО. Попробуйте ещё раз:")
+                return
+            if len(matches) == 1:
+                filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+                filters['soldier'] = matches[0]['full_name']
+                self.user_states[user_id]['journal_filters'] = filters
+                del self.user_states[user_id]['state']
+                await self.show_journal_management(update, context, None)
+                return
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton(s['full_name'], callback_data=f"journal_soldier_exact_{s['id']}")]
+                for s in matches[:10]
+            ]
+            await update.message.reply_text(
+                "Выберите бойца:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
         else:
             await update.message.reply_text("Используйте кнопки меню для навигации.")
     
@@ -164,10 +318,11 @@ class Handlers:
                 )
             
             is_admin = self.db.is_admin(user_id)
-            await self.show_main_menu(update, context, is_admin)
+            await self.show_main_menu(update, context, is_admin, query)
         else:
             await update.message.reply_text(
-                "Ошибка при добавлении записи. Попробуйте еще раз."
+                "Ошибка при добавлении записи. Попробуйте еще раз.",
+                reply_markup=get_back_keyboard()
             )
     
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -226,6 +381,456 @@ class Handlers:
         
         elif data == "cancel":
             await self.show_main_menu(update, context, is_admin, query)
+        elif data.startswith("editname_"):
+            soldier_id = int(data.split("_")[1])
+            self.user_states[user_id] = {"state": "waiting_for_new_name", "soldier_id": soldier_id}
+            await query.edit_message_text(
+                "Введите новое ФИО для бойца в формате: Фамилия И.О.\n\nПример: Иванов И.И.",
+                reply_markup=get_back_keyboard("admin_personnel")
+            )
+            return
+        elif data == "addsoldier_tgid":
+            self.user_states[user_id] = {"state": "waiting_for_new_soldier_tgid"}
+            await query.edit_message_text(
+                "Введите Telegram ID бойца (число):",
+                reply_markup=get_back_keyboard("admin_personnel")
+            )
+            return
+        elif data == "addsoldier_manual":
+            self.user_states[user_id] = {"state": "waiting_for_new_soldier_name"}
+            await query.edit_message_text(
+                "Введите ФИО нового бойца в формате: Фамилия И.О.\n\nПример: Иванов И.И.",
+                reply_markup=get_back_keyboard("admin_personnel")
+            )
+            return
+        elif data.startswith("removesoldier_"):
+            soldier_id = int(data.split("_")[1])
+            self.user_states[user_id] = {"state": "confirm_remove_soldier", "soldier_id": soldier_id}
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton("✅ Да, удалить", callback_data="removesoldier_confirm")],
+                [InlineKeyboardButton("❌ Нет, отмена", callback_data="admin_personnel")]
+            ]
+            soldier = self.db.get_user(soldier_id)
+            await query.edit_message_text(
+                f"Вы уверены, что хотите удалить бойца: {soldier['full_name']}?",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        elif data == "removesoldier_confirm":
+            state = self.user_states.get(user_id, {})
+            soldier_id = state.get("soldier_id")
+            if not soldier_id:
+                await query.edit_message_text("Ошибка: не выбран боец.", reply_markup=get_back_keyboard("admin_personnel"))
+                return
+            if self.db.remove_user(soldier_id):
+                await query.edit_message_text("✅ Боец успешно удалён.", reply_markup=get_back_keyboard("admin_personnel"))
+            else:
+                await query.edit_message_text("❌ Ошибка при удалении бойца.", reply_markup=get_back_keyboard("admin_personnel"))
+            if user_id in self.user_states:
+                del self.user_states[user_id]
+            return
+        elif data == "setnotif_time_soldiers":
+            self.user_states[user_id] = {"state": "waiting_for_time_soldiers"}
+            await query.edit_message_text(
+                "Введите новое время напоминания для бойцов (например, 18:40):",
+                reply_markup=get_back_keyboard("settings_notifications")
+            )
+            return
+        elif data == "setnotif_time_admins":
+            self.user_states[user_id] = {"state": "waiting_for_time_admins"}
+            await query.edit_message_text(
+                "Введите новое время напоминания для админов (например, 19:00):",
+                reply_markup=get_back_keyboard("settings_notifications")
+            )
+            return
+        elif data == "journal_filter_period":
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton("Сегодня", callback_data="journal_period_today")],
+                [InlineKeyboardButton("Вчера", callback_data="journal_period_yesterday")],
+                [InlineKeyboardButton("Неделя", callback_data="journal_period_week")],
+                [InlineKeyboardButton("Месяц", callback_data="journal_period_month")],
+                [InlineKeyboardButton("Выбрать даты", callback_data="journal_period_custom")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_journal")]
+            ]
+            await query.edit_message_text(
+                "Выберите период:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        elif data.startswith("journal_period_"):
+            period = data.split("_")[2]
+            filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+            filters['period'] = {
+                'today': 'Сегодня',
+                'yesterday': 'Вчера',
+                'week': 'Неделя',
+                'month': 'Месяц',
+            }.get(period, 'Месяц')
+            if user_id not in self.user_states:
+                self.user_states[user_id] = {}
+            self.user_states[user_id]['journal_filters'] = filters
+            await self.show_journal_management(update, context, query)
+            return
+        elif data == "journal_filter_reset":
+            if user_id in self.user_states and 'journal_filters' in self.user_states[user_id]:
+                del self.user_states[user_id]['journal_filters']
+            await self.show_journal_management(update, context, query)
+            return
+        if data == "journal_filter_soldier":
+            # Список всех бойцов по алфавиту
+            soldiers, _, _ = self.db.get_users_list(page=1, per_page=10000)
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton(s['full_name'], callback_data=f"journal_filter_soldier_{s['id']}")]
+                for s in soldiers
+            ]
+            keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_journal")])
+            await query.edit_message_text(
+                "Выберите бойца:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        if data.startswith("journal_filter_soldier_"):
+            soldier_id = int(data.split("_")[3])
+            soldier = self.db.get_user(soldier_id)
+            filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+            filters['soldier'] = soldier['full_name']
+            self.user_states[user_id]['journal_filters'] = filters
+            await self.show_journal_management(update, context, query)
+            return
+        if data == "journal_filter_location":
+            # Список всех уникальных локаций
+            locations = self.db.get_all_locations()
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton(loc, callback_data=f"journal_filter_location_{loc}")]
+                for loc in locations
+            ]
+            keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_journal")])
+            await query.edit_message_text(
+                "Выберите локацию:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        if data.startswith("journal_filter_location_"):
+            location = data.split("_", 3)[3]
+            filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+            filters['location'] = location
+            self.user_states[user_id]['journal_filters'] = filters
+            await self.show_journal_management(update, context, query)
+            return
+        if data == "journal_filter_action":
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton("убыл", callback_data="journal_filter_action_убыл")],
+                [InlineKeyboardButton("прибыл", callback_data="journal_filter_action_прибыл")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_journal")]
+            ]
+            await query.edit_message_text(
+                "Выберите действие:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        if data.startswith("journal_filter_action_"):
+            action = data.split("_", 3)[3]
+            filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+            filters['action'] = action
+            self.user_states[user_id]['journal_filters'] = filters
+            await self.show_journal_management(update, context, query)
+            return
+        elif data == "journal_filter_custom_date":
+            await query.edit_message_text(
+                "Введите дату начала периода (например, 2023-10-27):",
+                reply_markup=get_back_keyboard("admin_journal")
+            )
+            self.user_states[user_id] = {"state": "waiting_for_journal_custom_start_date"}
+            return
+        elif data == "journal_filter_custom_end_date":
+            await query.edit_message_text(
+                "Введите дату окончания периода (например, 2023-10-28):",
+                reply_markup=get_back_keyboard("admin_journal")
+            )
+            self.user_states[user_id] = {"state": "waiting_for_journal_custom_end_date"}
+            return
+        elif data == "journal_filter_apply_custom":
+            start_date_str = self.user_states.get(user_id, {}).get('journal_custom_start_date')
+            end_date_str = self.user_states.get(user_id, {}).get('journal_custom_end_date')
+            
+            if not start_date_str or not end_date_str:
+                await query.edit_message_text(
+                    "Ошибка: даты не выбраны. Пожалуйста, выберите дату начала и окончания периода.",
+                    reply_markup=get_back_keyboard("admin_journal")
+                )
+                return
+            
+            try:
+                start_date = datetime.fromisoformat(start_date_str.replace('Z', '+00:00'))
+                end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
+                
+                if start_date > end_date:
+                    await query.edit_message_text(
+                        "Дата начала не может быть позже даты окончания. Пожалуйста, выберите корректные даты.",
+                        reply_markup=get_back_keyboard("admin_journal")
+                    )
+                    return
+                
+                filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+                filters['period'] = 'Выбрать даты'
+                filters['start_date'] = start_date.isoformat()
+                filters['end_date'] = end_date.isoformat()
+                self.user_states[user_id]['journal_filters'] = filters
+                await self.show_journal_management(update, context, query)
+                return
+            except ValueError:
+                await query.edit_message_text(
+                    "Неверный формат даты. Пожалуйста, введите дату в формате YYYY-MM-DD.",
+                    reply_markup=get_back_keyboard("admin_journal")
+                )
+                return
+        elif data == "journal_filter_clear_custom":
+            if user_id in self.user_states and 'journal_filters' in self.user_states[user_id]:
+                del self.user_states[user_id]['journal_filters']
+                del self.user_states[user_id]['journal_custom_start_date']
+                del self.user_states[user_id]['journal_custom_end_date']
+            await self.show_journal_management(update, context, query)
+            return
+        elif data == "journal_export_filtered":
+            filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+            from datetime import datetime, timedelta
+            now = datetime.now()
+            period = filters.get('period', 'Месяц')
+            if period == 'Сегодня':
+                start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                end = now
+            elif period == 'Вчера':
+                start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+                end = start.replace(hour=23, minute=59, second=59, microsecond=999999)
+            elif period == 'Неделя':
+                start = now - timedelta(days=7)
+                end = now
+            elif period == 'Месяц':
+                start = now - timedelta(days=30)
+                end = now
+            else:
+                start = now - timedelta(days=30)
+                end = now
+            filename = self.db.export_to_excel_with_filters(
+                start, end,
+                soldier=filters.get('soldier'),
+                location=filters.get('location'),
+                action=filters.get('action')
+            )
+            if filename:
+                with open(filename, 'rb') as file:
+                    await context.bot.send_document(
+                        chat_id=update.effective_chat.id,
+                        document=file,
+                        caption="📤 Экспорт журнала с фильтрами"
+                    )
+                await query.edit_message_text(
+                    "✅ Экспорт журнала с фильтрами выполнен!",
+                    reply_markup=get_back_keyboard("admin_journal")
+                )
+            else:
+                await query.edit_message_text(
+                    "❌ Нет данных для экспорта по выбранным фильтрам.",
+                    reply_markup=get_back_keyboard("admin_journal")
+                )
+            return
+        elif data == "stats_filter_period":
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton("Сегодня", callback_data="stats_period_today")],
+                [InlineKeyboardButton("Вчера", callback_data="stats_period_yesterday")],
+                [InlineKeyboardButton("Неделя", callback_data="stats_period_week")],
+                [InlineKeyboardButton("Месяц", callback_data="stats_period_month")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_journal")]
+            ]
+            await query.edit_message_text(
+                "Выберите период:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        elif data.startswith("stats_period_"):
+            period = data.split("_")[2]
+            filters = self.user_states.get(user_id, {}).get('stats_filters', {})
+            filters['period'] = {
+                'today': 'Сегодня',
+                'yesterday': 'Вчера',
+                'week': 'Неделя',
+                'month': 'Месяц',
+            }.get(period, 'Месяц')
+            if user_id not in self.user_states:
+                self.user_states[user_id] = {}
+            self.user_states[user_id]['stats_filters'] = filters
+            await self.show_journal_statistics(update, context, query)
+            return
+        elif data == "stats_filter_reset":
+            if user_id in self.user_states and 'stats_filters' in self.user_states[user_id]:
+                del self.user_states[user_id]['stats_filters']
+            await self.show_journal_statistics(update, context, query)
+            return
+        elif data == "stats_filter_soldier":
+            soldiers, _, _ = self.db.get_users_list(page=1, per_page=10000)
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton(s['full_name'], callback_data=f"stats_filter_soldier_{s['id']}")]
+                for s in soldiers
+            ]
+            keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_journal")])
+            await query.edit_message_text(
+                "Выберите бойца:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        elif data.startswith("stats_filter_soldier_"):
+            soldier_id = int(data.split("_")[3])
+            soldier = self.db.get_user(soldier_id)
+            filters = self.user_states.get(user_id, {}).get('stats_filters', {})
+            filters['soldier'] = soldier['full_name']
+            self.user_states[user_id]['stats_filters'] = filters
+            await self.show_journal_statistics(update, context, query)
+            return
+        elif data == "stats_filter_location":
+            locations = self.db.get_all_locations()
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton(loc, callback_data=f"stats_filter_location_{loc}")]
+                for loc in locations
+            ]
+            keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_journal")])
+            await query.edit_message_text(
+                "Выберите локацию:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        elif data.startswith("stats_filter_location_"):
+            location = data.split("_", 3)[3]
+            filters = self.user_states.get(user_id, {}).get('stats_filters', {})
+            filters['location'] = location
+            self.user_states[user_id]['stats_filters'] = filters
+            await self.show_journal_statistics(update, context, query)
+            return
+        elif data == "personnel_filter_status":
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton("в части", callback_data="personnel_status_в_части")],
+                [InlineKeyboardButton("вне части", callback_data="personnel_status_вне_части")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_personnel")]
+            ]
+            await query.edit_message_text(
+                "Выберите статус:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        elif data.startswith("personnel_status_"):
+            status = data.split("_", 2)[2]
+            filters = self.user_states.get(user_id, {}).get('personnel_filters', {})
+            filters['status'] = status
+            self.user_states[user_id]['personnel_filters'] = filters
+            await self.show_personnel_management(update, context, query)
+            return
+        elif data == "personnel_filter_name":
+            self.user_states[user_id] = {"state": "waiting_for_personnel_name"}
+            await query.edit_message_text(
+                "Введите часть ФИО для поиска:",
+                reply_markup=get_back_keyboard("admin_personnel")
+            )
+            return
+        elif data == "personnel_filter_location":
+            locations = self.db.get_all_locations()
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton(loc, callback_data=f"personnel_location_{loc}")]
+                for loc in locations
+            ]
+            keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_personnel")])
+            await query.edit_message_text(
+                "Выберите локацию:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        elif data.startswith("personnel_location_"):
+            location = data.split("_", 2)[2]
+            filters = self.user_states.get(user_id, {}).get('personnel_filters', {})
+            filters['location'] = location
+            self.user_states[user_id]['personnel_filters'] = filters
+            await self.show_personnel_management(update, context, query)
+            return
+        elif data == "personnel_filter_reset":
+            if user_id in self.user_states and 'personnel_filters' in self.user_states[user_id]:
+                del self.user_states[user_id]['personnel_filters']
+            await self.show_personnel_management(update, context, query)
+            return
+        elif data == "journal_page_prev":
+            page = self.user_states.get(user_id, {}).get('journal_page', 1)
+            self.user_states[user_id]['journal_page'] = max(1, page - 1)
+            await self.show_journal_records(update, context, query)
+            return
+        elif data == "journal_page_next":
+            page = self.user_states.get(user_id, {}).get('journal_page', 1)
+            self.user_states[user_id]['journal_page'] = page + 1
+            await self.show_journal_records(update, context, query)
+            return
+        elif data.startswith("journal_period_") or data.startswith("journal_filter_soldier_") or data.startswith("journal_filter_location_") or data.startswith("journal_filter_action_") or data == "journal_filter_reset":
+            if user_id not in self.user_states:
+                self.user_states[user_id] = {}
+            self.user_states[user_id]['journal_page'] = 1
+        elif data == "personnel_page_prev":
+            page = self.user_states.get(user_id, {}).get('personnel_page', 1)
+            self.user_states[user_id]['personnel_page'] = max(1, page - 1)
+            await self.show_personnel_management(update, context, query)
+            return
+        elif data == "personnel_page_next":
+            page = self.user_states.get(user_id, {}).get('personnel_page', 1)
+            self.user_states[user_id]['personnel_page'] = page + 1
+            await self.show_personnel_management(update, context, query)
+            return
+        elif data.startswith("personnel_status_") or data.startswith("personnel_location_") or data == "personnel_filter_reset" or data == "personnel_filter_name":
+            if user_id not in self.user_states:
+                self.user_states[user_id] = {}
+            self.user_states[user_id]['personnel_page'] = 1
+        elif data.startswith("personnel_name_exact_"):
+            soldier_id = int(data.split("_", 3)[3])
+            soldier = self.db.get_user(soldier_id)
+            filters = self.user_states.get(user_id, {}).get('personnel_filters', {})
+            filters['name'] = soldier['full_name']
+            self.user_states[user_id]['personnel_filters'] = filters
+            if 'state' in self.user_states[user_id]:
+                del self.user_states[user_id]['state']
+            await self.show_personnel_management(update, context, query)
+            return
+        elif data.startswith("journal_soldier_exact_"):
+            soldier_id = int(data.split("_", 3)[3])
+            soldier = self.db.get_user(soldier_id)
+            filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+            filters['soldier'] = soldier['full_name']
+            self.user_states[user_id]['journal_filters'] = filters
+            if 'state' in self.user_states[user_id]:
+                del self.user_states[user_id]['state']
+            await self.show_journal_management(update, context, query)
+            return
+        elif data == "stats_page_prev":
+            page = self.user_states.get(user_id, {}).get('stats_page', 1)
+            self.user_states[user_id]['stats_page'] = max(1, page - 1)
+            await self.show_journal_statistics(update, context, query)
+            return
+        elif data == "stats_page_next":
+            page = self.user_states.get(user_id, {}).get('stats_page', 1)
+            self.user_states[user_id]['stats_page'] = page + 1
+            await self.show_journal_statistics(update, context, query)
+            return
+        elif data.startswith("stats_period_") or data.startswith("stats_filter_soldier_") or data.startswith("stats_filter_location_") or data == "stats_filter_reset":
+            if user_id not in self.user_states:
+                self.user_states[user_id] = {}
+            self.user_states[user_id]['stats_page'] = 1
+        else:
+            await query.edit_message_text(
+                "Функция в разработке или недоступна.",
+                reply_markup=get_back_keyboard("admin_panel")
+            )
     
     async def show_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
                            is_admin: bool, query=None):
@@ -376,6 +981,7 @@ class Handlers:
                 locations[location].append(soldier['full_name'])
             
             for location, soldiers in locations.items():
+                soldiers = sorted(soldiers)
                 text += f"📍 {location}:\n"
                 for soldier in soldiers:
                     text += f"  • {soldier}\n"
@@ -384,18 +990,442 @@ class Handlers:
         await query.edit_message_text(text, reply_markup=get_back_keyboard("admin_panel"))
     
     async def show_personnel_management(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
-        """Показать управление личным составом"""
-        keyboard = get_personnel_management_keyboard()
-        text = "👥 Управление личным составом\n\nВыберите действие:"
-        
-        await query.edit_message_text(text, reply_markup=keyboard)
-    
+        """Показать управление личным составом с фильтрами и пагинацией"""
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        user_id = update.effective_user.id
+        filters = self.user_states.get(user_id, {}).get('personnel_filters', {})
+        page = self.user_states.get(user_id, {}).get('personnel_page', 1)
+        PAGE_SIZE = 10
+        keyboard = [
+            [InlineKeyboardButton("Статус", callback_data="personnel_filter_status")],
+            [InlineKeyboardButton("ФИО", callback_data="personnel_filter_name")],
+            [InlineKeyboardButton("Локация", callback_data="personnel_filter_location")],
+            [InlineKeyboardButton("🔄 Сбросить фильтры", callback_data="personnel_filter_reset")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]
+        ]
+        filter_text = self._get_personnel_filter_text(filters)
+        # Получаем бойцов с учётом фильтров
+        soldiers, _, _ = self.db.get_users_list(page=1, per_page=10000)
+        filtered = []
+        for s in soldiers:
+            if filters.get('status') and s['status'] != filters['status']:
+                continue
+            if filters.get('name') and filters['name'].lower() not in s['full_name'].lower():
+                continue
+            if filters.get('location') and (not s['last_location'] or filters['location'].lower() not in s['last_location'].lower()):
+                continue
+            filtered.append(s)
+        total_pages = max(1, (len(filtered) + PAGE_SIZE - 1) // PAGE_SIZE)
+        page = max(1, min(page, total_pages))
+        start_idx = (page - 1) * PAGE_SIZE
+        end_idx = start_idx + PAGE_SIZE
+        page_soldiers = filtered[start_idx:end_idx]
+        text = f"👥 Управление личным составом\n\n{filter_text}\n"
+        if not page_soldiers:
+            text += "Нет бойцов по выбранным фильтрам."
+        else:
+            text += f"Страница {page}/{total_pages}\n\n"
+            text += "\n".join([f"{s['full_name']} — {s['status']} — {s['last_location'] or '-'}" for s in page_soldiers])
+        # Кнопки пагинации
+        buttons = []
+        if page > 1:
+            buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data="personnel_page_prev"))
+        if page < total_pages:
+            buttons.append(InlineKeyboardButton("Вперёд ➡️", callback_data="personnel_page_next"))
+        buttons.append(InlineKeyboardButton("🔙 Назад", callback_data="admin_panel"))
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup([buttons, *keyboard]))
+
+    def _get_personnel_filter_text(self, filters):
+        text = "<b>Текущие фильтры:</b>\n"
+        if filters.get('status'):
+            text += f"Статус: {filters['status']}\n"
+        if filters.get('name'):
+            text += f"ФИО: {filters['name']}\n"
+        if filters.get('location'):
+            text += f"Локация: {filters['location']}\n"
+        return text
+
     async def show_journal_management(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
-        """Показать управление журналом"""
-        keyboard = get_journal_management_keyboard()
-        text = "📖 Журнал событий\n\nВыберите действие:"
-        
-        await query.edit_message_text(text, reply_markup=keyboard)
+        """Показать управление журналом с фильтрами"""
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        keyboard = [
+            [InlineKeyboardButton("📅 Фильтр по периоду", callback_data="journal_filter_period")],
+            [InlineKeyboardButton("👤 Фильтр по бойцу", callback_data="journal_filter_soldier")],
+            [InlineKeyboardButton("📍 Фильтр по локации", callback_data="journal_filter_location")],
+            [InlineKeyboardButton("🚶 Фильтр по действию", callback_data="journal_filter_action")],
+            [InlineKeyboardButton("🔄 Сбросить фильтры", callback_data="journal_filter_reset")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]
+        ]
+        # Показываем текущие фильтры
+        user_id = update.effective_user.id
+        filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+        filter_text = self._get_journal_filter_text(filters)
+        await query.edit_message_text(
+            f"📖 Журнал событий\n\n{filter_text}\nВыберите фильтр:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+    def _get_journal_filter_text(self, filters):
+        text = "<b>Текущие фильтры:</b>\n"
+        period = filters.get('period', 'Месяц')
+        text += f"Период: {period}\n"
+        if filters.get('soldier'):
+            text += f"Боец: {filters['soldier']}\n"
+        if filters.get('location'):
+            text += f"Локация: {filters['location']}\n"
+        if filters.get('action'):
+            text += f"Действие: {filters['action']}\n"
+        return text
+
+    async def handle_journal_actions(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
+                                     query, data: str, is_main_admin: bool):
+        """Обработка действий с журналом (фильтрация, сброс)"""
+        if data == "journal_filter_period":
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton("Сегодня", callback_data="journal_period_today")],
+                [InlineKeyboardButton("Вчера", callback_data="journal_period_yesterday")],
+                [InlineKeyboardButton("Неделя", callback_data="journal_period_week")],
+                [InlineKeyboardButton("Месяц", callback_data="journal_period_month")],
+                [InlineKeyboardButton("Выбрать даты", callback_data="journal_period_custom")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_journal")]
+            ]
+            await query.edit_message_text(
+                "Выберите период:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        elif data.startswith("journal_period_"):
+            period = data.split("_")[2]
+            filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+            filters['period'] = {
+                'today': 'Сегодня',
+                'yesterday': 'Вчера',
+                'week': 'Неделя',
+                'month': 'Месяц',
+            }.get(period, 'Месяц')
+            if user_id not in self.user_states:
+                self.user_states[user_id] = {}
+            self.user_states[user_id]['journal_filters'] = filters
+            await self.show_journal_management(update, context, query)
+            return
+        elif data == "journal_filter_reset":
+            if user_id in self.user_states and 'journal_filters' in self.user_states[user_id]:
+                del self.user_states[user_id]['journal_filters']
+            await self.show_journal_management(update, context, query)
+            return
+        elif data.startswith("journal_filter_soldier_"):
+            soldier_id = int(data.split("_")[2])
+            filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+            filters['soldier'] = soldier_id
+            self.user_states[user_id]['journal_filters'] = filters
+            await self.show_journal_management(update, context, query)
+            return
+        elif data.startswith("journal_filter_location_"):
+            location = data.split("_")[2]
+            filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+            filters['location'] = location
+            self.user_states[user_id]['journal_filters'] = filters
+            await self.show_journal_management(update, context, query)
+            return
+        elif data.startswith("journal_filter_action_"):
+            action = data.split("_")[2]
+            filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+            filters['action'] = action
+            self.user_states[user_id]['journal_filters'] = filters
+            await self.show_journal_management(update, context, query)
+            return
+        elif data == "journal_filter_custom_date":
+            await query.edit_message_text(
+                "Введите дату начала периода (например, 2023-10-27):",
+                reply_markup=get_back_keyboard("admin_journal")
+            )
+            self.user_states[user_id] = {"state": "waiting_for_journal_custom_start_date"}
+            return
+        elif data == "journal_filter_custom_end_date":
+            await query.edit_message_text(
+                "Введите дату окончания периода (например, 2023-10-28):",
+                reply_markup=get_back_keyboard("admin_journal")
+            )
+            self.user_states[user_id] = {"state": "waiting_for_journal_custom_end_date"}
+            return
+        elif data == "journal_filter_apply_custom":
+            start_date_str = self.user_states.get(user_id, {}).get('journal_custom_start_date')
+            end_date_str = self.user_states.get(user_id, {}).get('journal_custom_end_date')
+            
+            if not start_date_str or not end_date_str:
+                await query.edit_message_text(
+                    "Ошибка: даты не выбраны. Пожалуйста, выберите дату начала и окончания периода.",
+                    reply_markup=get_back_keyboard("admin_journal")
+                )
+                return
+            
+            try:
+                start_date = datetime.fromisoformat(start_date_str.replace('Z', '+00:00'))
+                end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
+                
+                if start_date > end_date:
+                    await query.edit_message_text(
+                        "Дата начала не может быть позже даты окончания. Пожалуйста, выберите корректные даты.",
+                        reply_markup=get_back_keyboard("admin_journal")
+                    )
+                    return
+                
+                filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+                filters['period'] = 'Выбрать даты'
+                filters['start_date'] = start_date.isoformat()
+                filters['end_date'] = end_date.isoformat()
+                self.user_states[user_id]['journal_filters'] = filters
+                await self.show_journal_management(update, context, query)
+                return
+            except ValueError:
+                await query.edit_message_text(
+                    "Неверный формат даты. Пожалуйста, введите дату в формате YYYY-MM-DD.",
+                    reply_markup=get_back_keyboard("admin_journal")
+                )
+                return
+        elif data == "journal_filter_clear_custom":
+            if user_id in self.user_states and 'journal_filters' in self.user_states[user_id]:
+                del self.user_states[user_id]['journal_filters']
+                del self.user_states[user_id]['journal_custom_start_date']
+                del self.user_states[user_id]['journal_custom_end_date']
+            await self.show_journal_management(update, context, query)
+            return
+        elif data == "journal_export_filtered":
+            filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+            from datetime import datetime, timedelta
+            now = datetime.now()
+            period = filters.get('period', 'Месяц')
+            if period == 'Сегодня':
+                start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                end = now
+            elif period == 'Вчера':
+                start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+                end = start.replace(hour=23, minute=59, second=59, microsecond=999999)
+            elif period == 'Неделя':
+                start = now - timedelta(days=7)
+                end = now
+            elif period == 'Месяц':
+                start = now - timedelta(days=30)
+                end = now
+            else:
+                start = now - timedelta(days=30)
+                end = now
+            filename = self.db.export_to_excel_with_filters(
+                start, end,
+                soldier=filters.get('soldier'),
+                location=filters.get('location'),
+                action=filters.get('action')
+            )
+            if filename:
+                with open(filename, 'rb') as file:
+                    await context.bot.send_document(
+                        chat_id=update.effective_chat.id,
+                        document=file,
+                        caption="📤 Экспорт журнала с фильтрами"
+                    )
+                await query.edit_message_text(
+                    "✅ Экспорт журнала с фильтрами выполнен!",
+                    reply_markup=get_back_keyboard("admin_journal")
+                )
+            else:
+                await query.edit_message_text(
+                    "❌ Нет данных для экспорта по выбранным фильтрам.",
+                    reply_markup=get_back_keyboard("admin_journal")
+                )
+            return
+        elif data == "stats_filter_period":
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton("Сегодня", callback_data="stats_period_today")],
+                [InlineKeyboardButton("Вчера", callback_data="stats_period_yesterday")],
+                [InlineKeyboardButton("Неделя", callback_data="stats_period_week")],
+                [InlineKeyboardButton("Месяц", callback_data="stats_period_month")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_journal")]
+            ]
+            await query.edit_message_text(
+                "Выберите период:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        elif data.startswith("stats_period_"):
+            period = data.split("_")[2]
+            filters = self.user_states.get(user_id, {}).get('stats_filters', {})
+            filters['period'] = {
+                'today': 'Сегодня',
+                'yesterday': 'Вчера',
+                'week': 'Неделя',
+                'month': 'Месяц',
+            }.get(period, 'Месяц')
+            if user_id not in self.user_states:
+                self.user_states[user_id] = {}
+            self.user_states[user_id]['stats_filters'] = filters
+            await self.show_journal_statistics(update, context, query)
+            return
+        elif data == "stats_filter_reset":
+            if user_id in self.user_states and 'stats_filters' in self.user_states[user_id]:
+                del self.user_states[user_id]['stats_filters']
+            await self.show_journal_statistics(update, context, query)
+            return
+        elif data == "stats_filter_soldier":
+            soldiers, _, _ = self.db.get_users_list(page=1, per_page=10000)
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton(s['full_name'], callback_data=f"stats_filter_soldier_{s['id']}")]
+                for s in soldiers
+            ]
+            keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_journal")])
+            await query.edit_message_text(
+                "Выберите бойца:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        elif data.startswith("stats_filter_soldier_"):
+            soldier_id = int(data.split("_")[3])
+            soldier = self.db.get_user(soldier_id)
+            filters = self.user_states.get(user_id, {}).get('stats_filters', {})
+            filters['soldier'] = soldier['full_name']
+            self.user_states[user_id]['stats_filters'] = filters
+            await self.show_journal_statistics(update, context, query)
+            return
+        elif data == "stats_filter_location":
+            locations = self.db.get_all_locations()
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton(loc, callback_data=f"stats_filter_location_{loc}")]
+                for loc in locations
+            ]
+            keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_journal")])
+            await query.edit_message_text(
+                "Выберите локацию:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        elif data.startswith("stats_filter_location_"):
+            location = data.split("_", 3)[3]
+            filters = self.user_states.get(user_id, {}).get('stats_filters', {})
+            filters['location'] = location
+            self.user_states[user_id]['stats_filters'] = filters
+            await self.show_journal_statistics(update, context, query)
+            return
+        elif data == "personnel_filter_status":
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton("в части", callback_data="personnel_status_в_части")],
+                [InlineKeyboardButton("вне части", callback_data="personnel_status_вне_части")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_personnel")]
+            ]
+            await query.edit_message_text(
+                "Выберите статус:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        elif data.startswith("personnel_status_"):
+            status = data.split("_", 2)[2]
+            filters = self.user_states.get(user_id, {}).get('personnel_filters', {})
+            filters['status'] = status
+            self.user_states[user_id]['personnel_filters'] = filters
+            await self.show_personnel_management(update, context, query)
+            return
+        elif data == "personnel_filter_name":
+            self.user_states[user_id] = {"state": "waiting_for_personnel_name"}
+            await query.edit_message_text(
+                "Введите часть ФИО для поиска:",
+                reply_markup=get_back_keyboard("admin_personnel")
+            )
+            return
+        elif data == "personnel_filter_location":
+            locations = self.db.get_all_locations()
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton(loc, callback_data=f"personnel_location_{loc}")]
+                for loc in locations
+            ]
+            keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_personnel")])
+            await query.edit_message_text(
+                "Выберите локацию:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        elif data.startswith("personnel_location_"):
+            location = data.split("_", 2)[2]
+            filters = self.user_states.get(user_id, {}).get('personnel_filters', {})
+            filters['location'] = location
+            self.user_states[user_id]['personnel_filters'] = filters
+            await self.show_personnel_management(update, context, query)
+            return
+        elif data == "personnel_filter_reset":
+            if user_id in self.user_states and 'personnel_filters' in self.user_states[user_id]:
+                del self.user_states[user_id]['personnel_filters']
+            await self.show_personnel_management(update, context, query)
+            return
+        elif data == "journal_page_prev":
+            page = self.user_states.get(user_id, {}).get('journal_page', 1)
+            self.user_states[user_id]['journal_page'] = max(1, page - 1)
+            await self.show_journal_records(update, context, query)
+            return
+        elif data == "journal_page_next":
+            page = self.user_states.get(user_id, {}).get('journal_page', 1)
+            self.user_states[user_id]['journal_page'] = page + 1
+            await self.show_journal_records(update, context, query)
+            return
+        elif data.startswith("journal_period_") or data.startswith("journal_filter_soldier_") or data.startswith("journal_filter_location_") or data.startswith("journal_filter_action_") or data == "journal_filter_reset":
+            if user_id not in self.user_states:
+                self.user_states[user_id] = {}
+            self.user_states[user_id]['journal_page'] = 1
+        elif data == "personnel_page_prev":
+            page = self.user_states.get(user_id, {}).get('personnel_page', 1)
+            self.user_states[user_id]['personnel_page'] = max(1, page - 1)
+            await self.show_personnel_management(update, context, query)
+            return
+        elif data == "personnel_page_next":
+            page = self.user_states.get(user_id, {}).get('personnel_page', 1)
+            self.user_states[user_id]['personnel_page'] = page + 1
+            await self.show_personnel_management(update, context, query)
+            return
+        elif data.startswith("personnel_status_") or data.startswith("personnel_location_") or data == "personnel_filter_reset" or data == "personnel_filter_name":
+            if user_id not in self.user_states:
+                self.user_states[user_id] = {}
+            self.user_states[user_id]['personnel_page'] = 1
+        elif data.startswith("personnel_name_exact_"):
+            soldier_id = int(data.split("_", 3)[3])
+            soldier = self.db.get_user(soldier_id)
+            filters = self.user_states.get(user_id, {}).get('personnel_filters', {})
+            filters['name'] = soldier['full_name']
+            self.user_states[user_id]['personnel_filters'] = filters
+            if 'state' in self.user_states[user_id]:
+                del self.user_states[user_id]['state']
+            await self.show_personnel_management(update, context, query)
+            return
+        elif data.startswith("journal_soldier_exact_"):
+            soldier_id = int(data.split("_", 3)[3])
+            soldier = self.db.get_user(soldier_id)
+            filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+            filters['soldier'] = soldier['full_name']
+            self.user_states[user_id]['journal_filters'] = filters
+            if 'state' in self.user_states[user_id]:
+                del self.user_states[user_id]['state']
+            await self.show_journal_management(update, context, query)
+            return
+        elif data == "stats_page_prev":
+            page = self.user_states.get(user_id, {}).get('stats_page', 1)
+            self.user_states[user_id]['stats_page'] = max(1, page - 1)
+            await self.show_journal_statistics(update, context, query)
+            return
+        elif data == "stats_page_next":
+            page = self.user_states.get(user_id, {}).get('stats_page', 1)
+            self.user_states[user_id]['stats_page'] = page + 1
+            await self.show_journal_statistics(update, context, query)
+            return
+        elif data.startswith("stats_period_") or data.startswith("stats_filter_soldier_") or data.startswith("stats_filter_location_") or data == "stats_filter_reset":
+            if user_id not in self.user_states:
+                self.user_states[user_id] = {}
+            self.user_states[user_id]['stats_page'] = 1
+        else:
+            await query.edit_message_text(
+                "Функция в разработке или недоступна.",
+                reply_markup=get_back_keyboard("admin_panel")
+            )
     
     async def show_settings_panel(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
                                 query, is_main_admin: bool):
@@ -420,10 +1450,21 @@ class Handlers:
         await query.edit_message_text(text, reply_markup=keyboard)
     
     async def show_general_settings(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
-        """Показать общие настройки"""
-        text = "⚙️ Общие настройки\n\n🔧 Функция в разработке"
-        
-        await query.edit_message_text(text, reply_markup=get_back_keyboard("admin_settings"))
+        """Показать общие настройки пользователя"""
+        user_id = update.effective_user.id
+        settings = self.db.get_user_settings(user_id)
+        lang = settings.get('language', 'ru')
+        tz = settings.get('timezone', 'Europe/Moscow')
+        tf = settings.get('timeformat', '24h')
+        text = (
+            f"⚙️ Общие настройки\n\n"
+            f"🌐 Язык: {lang}\n"
+            f"🕒 Часовой пояс: {tz}\n"
+            f"⏳ Формат времени: {tf}\n\n"
+            f"Выберите, что изменить:"
+        )
+        from keyboards import get_general_settings_keyboard
+        await query.edit_message_text(text, reply_markup=get_general_settings_keyboard())
     
     async def mark_all_arrived(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
         """Отметить всех прибывшими"""
@@ -460,191 +1501,17 @@ class Handlers:
     
     async def set_notification_time(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
         """Настройка времени уведомлений"""
-        text = "⏰ Настройка времени уведомлений\n\n🔧 Функция в разработке"
-        
-        await query.edit_message_text(text, reply_markup=get_back_keyboard("settings_notifications"))
-    
-    async def set_notification_recipients(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
-        """Настройка получателей уведомлений"""
-        text = "👥 Настройка получателей уведомлений\n\n🔧 Функция в разработке"
-        
-        await query.edit_message_text(text, reply_markup=get_back_keyboard("settings_notifications"))
-    
-    async def toggle_silent_mode(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
-        """Переключить режим тишины"""
-        text = "🔇 Режим тишины переключен!\n\n🔕 Уведомления будут отправляться без звука."
-        
-        await query.edit_message_text(text, reply_markup=get_back_keyboard("settings_notifications"))
-    
-    async def edit_soldier_name(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
-        """Редактирование ФИО бойца"""
-        text = "✏️ Смена ФИО бойца\n\n🔧 Функция в разработке"
-        
-        await query.edit_message_text(text, reply_markup=get_back_keyboard("admin_personnel"))
-    
-    async def add_new_soldier(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
-        """Добавление нового бойца"""
-        text = "➕ Добавление нового бойца\n\n🔧 Функция в разработке"
-        
-        await query.edit_message_text(text, reply_markup=get_back_keyboard("admin_personnel"))
-    
-    async def remove_soldier(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
-        """Удаление бойца"""
-        text = "❌ Удаление бойца\n\n🔧 Функция в разработке"
-        
-        await query.edit_message_text(text, reply_markup=get_back_keyboard("admin_personnel"))
-    
-    async def export_journal_data(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
-        """Экспорт данных журнала"""
-        try:
-            filename = self.db.export_to_excel(30)
-            if filename:
-                with open(filename, 'rb') as file:
-                    await context.bot.send_document(
-                        chat_id=update.effective_chat.id,
-                        document=file,
-                        caption="📥 Экспорт журнала за последние 30 дней"
-                    )
-                await query.edit_message_text(
-                    "✅ Журнал успешно экспортирован!",
-                    reply_markup=get_back_keyboard("admin_journal")
-                )
-            else:
-                await query.edit_message_text(
-                    "❌ Нет данных для экспорта.",
-                    reply_markup=get_back_keyboard("admin_journal")
-                )
-        except Exception as e:
-            await query.edit_message_text(
-                f"❌ Ошибка при экспорте: {str(e)}",
-                reply_markup=get_back_keyboard("admin_journal")
-            )
-    
-    async def show_journal_statistics(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
-        """Показать статистику журнала"""
-        stats = self.db.get_statistics(30)
-        
-        text = "📊 Статистика журнала за последние 30 дней:\n\n"
-        text += f"📈 Всего записей: {stats['total_records']}\n"
-        text += f"👥 Активных пользователей: {stats['active_users']}\n\n"
-        
-        text += "📊 По действиям:\n"
-        for action, count in stats['action_stats'].items():
-            emoji = "🚶" if action == "убыл" else "🏠"
-            text += f"{emoji} {action}: {count}\n"
-        
-        text += "\n🏆 Топ локаций:\n"
-        for i, (location, count) in enumerate(list(stats['location_stats'].items())[:5], 1):
-            text += f"{i}. {location}: {count}\n"
-        
-        await query.edit_message_text(text, reply_markup=get_back_keyboard("admin_journal"))
-    
-    async def show_journal_records(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
-        """Показать записи журнала"""
-        records = self.db.get_all_records(7)  # За последнюю неделю
-        
-        if not records:
-            text = "📋 Записей в журнале за последнюю неделю не найдено."
-        else:
-            text = "📋 Записи журнала за последнюю неделю:\n\n"
-            for record in records[:10]:  # Показываем только первые 10
-                timestamp = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
-                formatted_time = timestamp.strftime('%d.%m.%Y %H:%M')
-                action_emoji = "🚶" if record['action'] == "убыл" else "🏠"
-                text += f"👤 {record['full_name']}\n"
-                text += f"{action_emoji} {record['action']} - {record['location']}\n"
-                text += f"⏰ {formatted_time}\n\n"
-            
-            if len(records) > 10:
-                text += f"... и еще {len(records) - 10} записей"
-        
-        await query.edit_message_text(text, reply_markup=get_back_keyboard("admin_journal"))
-    
-    async def handle_admin_actions(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
-                                 query, data: str, is_main_admin: bool):
-        """Обработка админских действий - Уровень 1"""
-        if data == "admin_panel":
-            await self.show_admin_panel(update, context, query, is_main_admin)
-        elif data == "admin_summary":
-            await self.show_admin_summary(update, context, query)
-        elif data == "admin_personnel":
-            await self.show_personnel_management(update, context, query)
-        elif data == "admin_journal":
-            await self.show_journal_management(update, context, query)
-        elif data == "admin_settings":
-            await self.show_settings_panel(update, context, query, is_main_admin)
-        elif data == "admin_manage" and is_main_admin:
-            await self.show_admin_management(update, context, query)
-        elif data == "admin_add" and is_main_admin:
-            await self.add_admin(update, context, query)
-        elif data == "admin_remove" and is_main_admin:
-            await self.remove_admin(update, context, query)
-        else:
-            await query.edit_message_text(
-                "Функция в разработке или недоступна.",
-                reply_markup=get_back_keyboard("admin_panel")
-            )
-    
-    async def handle_personnel_actions(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
-                                     query, data: str, is_main_admin: bool):
-        """Обработка действий с личным составом"""
-        if data == "personnel_edit_name":
-            await self.edit_soldier_name(update, context, query)
-        elif data == "personnel_add":
-            await self.add_new_soldier(update, context, query)
-        elif data == "personnel_remove":
-            await self.remove_soldier(update, context, query)
-        else:
-            await query.edit_message_text(
-                "Функция в разработке или недоступна.",
-                reply_markup=get_back_keyboard("admin_personnel")
-            )
-    
-    async def handle_journal_actions(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
-                                   query, data: str, is_main_admin: bool):
-        """Обработка действий с журналом"""
-        if data == "journal_export":
-            await self.export_journal_data(update, context, query)
-        elif data == "journal_stats":
-            await self.show_journal_statistics(update, context, query)
-        elif data == "journal_records":
-            await self.show_journal_records(update, context, query)
-        else:
-            await query.edit_message_text(
-                "Функция в разработке или недоступна.",
-                reply_markup=get_back_keyboard("admin_journal")
-            )
-    
-    async def handle_settings_actions(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
-                                    query, data: str, is_main_admin: bool):
-        """Обработка настроек"""
-        if data == "settings_notifications":
-            await self.show_notifications_settings(update, context, query)
-        elif data == "settings_general":
-            await self.show_general_settings(update, context, query)
-        elif data == "settings_danger_zone" and is_main_admin:
-            await self.show_danger_zone(update, context, query)
-        else:
-            await query.edit_message_text(
-                "Функция в разработке или недоступна.",
-                reply_markup=get_back_keyboard("admin_settings")
-            )
-    
-    async def handle_danger_actions(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
-                                  query, data: str, is_main_admin: bool):
-        """Обработка опасных действий"""
-        if data == "danger_mark_all_arrived":
-            await self.mark_all_arrived(update, context, query)
-        elif data == "danger_clear_all_data":
-            await self.clear_all_data(update, context, query)
-        elif data == "danger_reset_settings":
-            await self.reset_settings(update, context, query)
-        else:
-            await query.edit_message_text(
-                "Функция в разработке или недоступна.",
-                reply_markup=get_back_keyboard("settings_danger_zone")
-            )
-    
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        keyboard = [
+            [InlineKeyboardButton("Для бойцов", callback_data="setnotif_time_soldiers")],
+            [InlineKeyboardButton("Для админов", callback_data="setnotif_time_admins")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="settings_notifications")]
+        ]
+        await query.edit_message_text(
+            "Выберите, для кого изменить время напоминаний:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
     async def handle_notification_actions(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
                                         query, data: str, is_main_admin: bool):
         """Обработка настроек уведомлений"""
@@ -904,3 +1771,161 @@ class Handlers:
                 "❌ Неизвестное действие.",
                 reply_markup=get_back_keyboard("admin_panel")
             )
+
+    def save_global_notification_time(self, group: str, time_str: str):
+        """Сохраняет время напоминаний в файл notification_times.json"""
+        import json
+        import os
+        fname = 'notification_times.json'
+        data = {"soldiers": "18:40", "admins": "19:00"}
+        if os.path.exists(fname):
+            try:
+                with open(fname, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            except Exception:
+                pass
+        data[group] = time_str
+        with open(fname, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False)
+
+    async def show_journal_statistics(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
+        """Показать статистику журнала с фильтрами и пагинацией топ-локаций"""
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        user_id = update.effective_user.id
+        filters = self.user_states.get(user_id, {}).get('stats_filters', {})
+        page = self.user_states.get(user_id, {}).get('stats_page', 1)
+        PAGE_SIZE = 10
+        keyboard = [
+            [InlineKeyboardButton("📅 Период", callback_data="stats_filter_period")],
+            [InlineKeyboardButton("👤 Боец", callback_data="stats_filter_soldier")],
+            [InlineKeyboardButton("📍 Локация", callback_data="stats_filter_location")],
+            [InlineKeyboardButton("🔄 Сбросить фильтры", callback_data="stats_filter_reset")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="admin_journal")]
+        ]
+        filter_text = self._get_stats_filter_text(filters)
+        # Определяем период
+        from datetime import datetime, timedelta
+        now = datetime.now()
+        period = filters.get('period', 'Месяц')
+        if period == 'Сегодня':
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = now
+        elif period == 'Вчера':
+            start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            end = start.replace(hour=23, minute=59, second=59, microsecond=999999)
+        elif period == 'Неделя':
+            start = now - timedelta(days=7)
+            end = now
+        elif period == 'Месяц':
+            start = now - timedelta(days=30)
+            end = now
+        else:
+            start = now - timedelta(days=30)
+            end = now
+        # Получаем записи с фильтрами
+        records = self.db.get_all_records_by_period(
+            start, end,
+            soldier=filters.get('soldier'),
+            location=filters.get('location')
+        )
+        # Считаем статистику
+        total_records = len(records)
+        action_stats = {}
+        location_stats = {}
+        for r in records:
+            action_stats[r['action']] = action_stats.get(r['action'], 0) + 1
+            location_stats[r['location']] = location_stats.get(r['location'], 0) + 1
+        # Пагинация топ-локаций
+        sorted_locations = sorted(location_stats.items(), key=lambda x: -x[1])
+        total_pages = max(1, (len(sorted_locations) + PAGE_SIZE - 1) // PAGE_SIZE)
+        page = max(1, min(page, total_pages))
+        start_idx = (page - 1) * PAGE_SIZE
+        end_idx = start_idx + PAGE_SIZE
+        page_locations = sorted_locations[start_idx:end_idx]
+        text = f"📊 Статистика журнала за {period.lower()}\n\n"
+        text += f"📈 Всего записей: {total_records}\n"
+        text += "\n📊 По действиям:\n"
+        for action, count in action_stats.items():
+            emoji = "🚶" if action == "убыл" else "🏠"
+            text += f"{emoji} {action}: {count}\n"
+        text += f"\n🏆 Топ локаций (стр. {page}/{total_pages}):\n"
+        for i, (location, count) in enumerate(page_locations, 1 + start_idx):
+            text += f"{i}. {location}: {count}\n"
+        text += f"\n{filter_text}"
+        # Кнопки пагинации
+        buttons = []
+        if page > 1:
+            buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data="stats_page_prev"))
+        if page < total_pages:
+            buttons.append(InlineKeyboardButton("Вперёд ➡️", callback_data="stats_page_next"))
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup([buttons, *keyboard]))
+
+    def _get_stats_filter_text(self, filters):
+        text = "<b>Текущие фильтры:</b>\n"
+        period = filters.get('period', 'Месяц')
+        text += f"Период: {period}\n"
+        if filters.get('soldier'):
+            text += f"Боец: {filters['soldier']}\n"
+        if filters.get('location'):
+            text += f"Локация: {filters['location']}\n"
+        return text
+
+    async def show_journal_records(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
+        """Показать записи журнала с учётом фильтров и пагинации"""
+        user_id = update.effective_user.id
+        filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+        page = self.user_states.get(user_id, {}).get('journal_page', 1)
+        PAGE_SIZE = 10
+        # Определяем период
+        from datetime import datetime, timedelta
+        now = datetime.now()
+        period = filters.get('period', 'Месяц')
+        if period == 'Сегодня':
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = now
+        elif period == 'Вчера':
+            start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            end = start.replace(hour=23, minute=59, second=59, microsecond=999999)
+        elif period == 'Неделя':
+            start = now - timedelta(days=7)
+            end = now
+        elif period == 'Месяц':
+            start = now - timedelta(days=30)
+            end = now
+        else:
+            start = now - timedelta(days=30)
+            end = now
+        # Получаем записи за период и с фильтрами
+        records = self.db.get_all_records_by_period(
+            start, end,
+            soldier=filters.get('soldier'),
+            location=filters.get('location'),
+            action=filters.get('action')
+        )
+        total_pages = max(1, (len(records) + PAGE_SIZE - 1) // PAGE_SIZE)
+        page = max(1, min(page, total_pages))
+        start_idx = (page - 1) * PAGE_SIZE
+        end_idx = start_idx + PAGE_SIZE
+        page_records = records[start_idx:end_idx]
+        if not page_records:
+            text = "📋 Записей в журнале за выбранный период не найдено."
+        else:
+            text = f"📋 Записи журнала за {period.lower()} (стр. {page}/{total_pages})\n\n"
+            for record in page_records:
+                timestamp = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
+                formatted_time = timestamp.strftime('%d.%m.%Y %H:%M')
+                action_emoji = "🚶" if record['action'] == "убыл" else "🏠"
+                text += f"👤 {record['full_name']}\n"
+                text += f"{action_emoji} {record['action']} - {record['location']}\n"
+                text += f"⏰ {formatted_time}\n\n"
+            if len(records) > end_idx:
+                text += f"... и еще {len(records) - end_idx} записей"
+        # Кнопки пагинации
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        buttons = []
+        if page > 1:
+            buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data="journal_page_prev"))
+        if page < total_pages:
+            buttons.append(InlineKeyboardButton("Вперёд ➡️", callback_data="journal_page_next"))
+        buttons.append(InlineKeyboardButton("🔙 Назад", callback_data="admin_journal"))
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup([buttons]))
