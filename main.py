@@ -62,6 +62,8 @@ async def send_reminders(application):
             admins = db.get_all_admins()
             all_soldiers, _, _ = db.get_users_list(page=1, per_page=10000)
             from datetime import datetime
+            # Сортируем по ФИО
+            all_soldiers = sorted(all_soldiers, key=lambda u: u['full_name'])
             out_list = []
             in_list = []
             for user in all_soldiers:
