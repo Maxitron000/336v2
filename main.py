@@ -58,16 +58,23 @@ async def send_reminders(application):
                 except Exception as e:
                     print(f"Ошибка отправки напоминания бойцу {user['id']}: {e}")
         if now.hour == 19 and now.minute == 0:
-            # Напоминания администраторам
+            # Сводка для админов
             admins = db.get_all_admins()
+            # Получаем всех бойцов
+            all_soldiers, _, _ = db.get_users_list(page=1, per_page=10000)
+            summary = "📋 Сводка по бойцам на 19:00:\n\n"
+            for user in all_soldiers:
+                status = "🏠 В части" if user['status'] == 'в_части' else "🚶 Вне части"
+                location = user['last_location'] or "-"
+                summary += f"{user['full_name']} — {status} (локация: {location})\n"
             for admin in admins:
                 try:
                     await application.bot.send_message(
                         admin['id'],
-                        "⏰ Напоминание! Проверьте отчётность по прибытию бойцов."
+                        summary
                     )
                 except Exception as e:
-                    print(f"Ошибка отправки напоминания админу {admin['id']}: {e}")
+                    print(f"Ошибка отправки сводки админу {admin['id']}: {e}")
 
 async def main():
     """Основная функция запуска бота"""
