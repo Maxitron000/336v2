@@ -99,6 +99,39 @@ class Handlers:
             del self.user_states[user_id]
             is_admin = self.db.is_admin(user_id)
             await self.show_main_menu(update, context, is_admin)
+        elif state == 'waiting_for_new_soldier_name':
+            # Запрос username после ФИО
+            new_name = update.message.text.strip()
+            if not re.match(r'^[А-ЯЁ][а-яё]+ [А-ЯЁ]\.[А-ЯЁ]\.$', new_name):
+                await update.message.reply_text(
+                    "Неверный формат ФИО!\n\nПравильный формат: Фамилия И.О.\nПример: Иванов И.И.\n\nПопробуйте еще раз:")
+                return
+            self.user_states[user_id] = {"state": "waiting_for_new_soldier_username", "new_name": new_name}
+            await update.message.reply_text(
+                "Введите username нового бойца (без @) или отправьте '-' для генерации временного:")
+            return
+        elif state == 'waiting_for_new_soldier_username':
+            new_name = self.user_states[user_id]['new_name']
+            username = update.message.text.strip()
+            if username == '-':
+                import random
+                username = f"user_{random.randint(100000,999999)}"
+            # Проверка на дублирование username
+            soldiers, _, _ = self.db.get_users_list(page=1, per_page=10000)
+            if any(s['username'] == username for s in soldiers):
+                await update.message.reply_text("Пользователь с таким username уже существует! Введите другой username:")
+                return
+            # Генерируем временный user_id (отрицательный, чтобы не пересекался с Telegram ID)
+            import random
+            temp_id = -random.randint(100000, 999999)
+            if self.db.add_user(temp_id, username, new_name):
+                await update.message.reply_text(f"✅ Новый боец добавлен!\nФИО: {new_name}\nusername: {username}")
+            else:
+                await update.message.reply_text("❌ Ошибка при добавлении бойца. Попробуйте еще раз.")
+            del self.user_states[user_id]
+            is_admin = self.db.is_admin(user_id)
+            await self.show_main_menu(update, context, is_admin)
+            return
         else:
             await update.message.reply_text("Используйте кнопки меню для навигации.")
     
@@ -532,10 +565,13 @@ class Handlers:
 
     async def add_new_soldier(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
         """Добавление нового бойца"""
-        text = "➕ Добавление нового бойца\n\n🔧 Функция в разработке"
-        
-        await query.edit_message_text(text, reply_markup=get_back_keyboard("admin_personnel"))
-    
+        user_id = update.effective_user.id
+        self.user_states[user_id] = {"state": "waiting_for_new_soldier_name"}
+        await query.edit_message_text(
+            "Введите ФИО нового бойца в формате: Фамилия И.О.\n\nПример: Иванов И.И.",
+            reply_markup=get_back_keyboard("admin_personnel")
+        )
+
     async def remove_soldier(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
         """Удаление бойца"""
         text = "❌ Удаление бойца\n\n🔧 Функция в разработке"
