@@ -1,12 +1,28 @@
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Рота В - Электронный Табель</title>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
+        :root {
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+            --warning-color: #f59e0b;
+            --info-color: #3b82f6;
+            --dark-color: #1f2937;
+            --light-color: #f8fafc;
+            --border-radius: 16px;
+            --shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            --shadow-hover: 0 20px 40px rgba(0, 0, 0, 0.15);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -14,72 +30,132 @@
         }
 
         body {
-            font-family: 'Roboto', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
             min-height: 100vh;
-            color: #333;
+            color: var(--dark-color);
+            overflow-x: hidden;
+        }
+
+        .background-decoration {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"><defs><radialGradient id="a" cx="50%" cy="50%"><stop offset="0%" stop-color="rgba(255,255,255,0.1)"/><stop offset="100%" stop-color="rgba(255,255,255,0)"/></radialGradient></defs><circle cx="200" cy="200" r="150" fill="url(%23a)"/><circle cx="800" cy="300" r="200" fill="url(%23a)"/><circle cx="400" cy="700" r="180" fill="url(%23a)"/></svg>') no-repeat center center;
+            background-size: cover;
+            z-index: -1;
+            opacity: 0.3;
         }
 
         .header {
-            background: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
             border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-            padding: 1rem 0;
+            padding: 1.5rem 0;
             margin-bottom: 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
 
         .header-content {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             padding: 0 2rem;
-            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             color: white;
         }
 
-        .header h1 {
+        .header-left h1 {
             font-size: 2.5rem;
             font-weight: 700;
             margin-bottom: 0.5rem;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
         }
 
-        .header p {
-            font-size: 1.2rem;
+        .header-left p {
+            font-size: 1.1rem;
             opacity: 0.9;
+            font-weight: 300;
+        }
+
+        .time-display {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: var(--border-radius);
+            padding: 1rem 1.5rem;
+            text-align: right;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .time-display .time {
+            font-size: 1.8rem;
+            font-weight: 600;
+            display: block;
+        }
+
+        .time-display .date {
+            font-size: 1rem;
+            opacity: 0.8;
+            margin-top: 0.2rem;
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             padding: 0 2rem;
         }
 
         .dashboard {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
             gap: 2rem;
             margin-bottom: 3rem;
         }
 
         .card {
             background: rgba(255, 255, 255, 0.95);
-            border-radius: 20px;
+            border-radius: var(--border-radius);
             padding: 2rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            box-shadow: var(--shadow);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.3);
-            transition: all 0.3s ease;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
         }
 
         .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+            transform: translateY(-8px);
+            box-shadow: var(--shadow-hover);
         }
 
         .card-header {
             display: flex;
             align-items: center;
+            justify-content: space-between;
             margin-bottom: 1.5rem;
+        }
+
+        .card-title-group {
+            display: flex;
+            align-items: center;
         }
 
         .card-icon {
@@ -92,94 +168,239 @@
             margin-right: 1rem;
             font-size: 1.5rem;
             color: white;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
         }
 
-        .stats-icon { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
-        .present-icon { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
-        .absent-icon { background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); }
-        .system-icon { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-
         .card-title {
-            font-size: 1.3rem;
+            font-size: 1.4rem;
             font-weight: 600;
-            color: #333;
+            color: var(--dark-color);
+        }
+
+        .card-subtitle {
+            font-size: 0.9rem;
+            color: #64748b;
+            margin-top: 0.2rem;
+        }
+
+        .card-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn-small {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 8px;
+            background: var(--primary-color);
+            color: white;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .btn-small:hover {
+            background: var(--secondary-color);
+            transform: translateY(-2px);
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 1rem;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 12px;
+            border: 1px solid rgba(102, 126, 234, 0.2);
         }
 
         .stat-number {
-            font-size: 3rem;
+            font-size: 2.5rem;
             font-weight: 700;
-            color: #2c3e50;
-            margin: 1rem 0;
+            color: var(--primary-color);
+            display: block;
         }
 
         .stat-label {
-            color: #7f8c8d;
-            font-size: 1rem;
-            margin-bottom: 1rem;
+            color: #64748b;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
         }
 
         .personnel-list {
-            max-height: 300px;
+            max-height: 350px;
             overflow-y: auto;
             margin-top: 1rem;
+            scrollbar-width: thin;
+            scrollbar-color: var(--primary-color) transparent;
+        }
+
+        .personnel-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .personnel-list::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.1);
+            border-radius: 3px;
+        }
+
+        .personnel-list::-webkit-scrollbar-thumb {
+            background: var(--primary-color);
+            border-radius: 3px;
         }
 
         .person-item {
             display: flex;
             align-items: center;
-            padding: 0.8rem;
+            padding: 1rem;
             margin: 0.5rem 0;
-            background: rgba(255, 255, 255, 0.7);
-            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 12px;
             border-left: 4px solid;
+            transition: var(--transition);
+            cursor: pointer;
         }
 
-        .person-present { border-left-color: #27ae60; }
-        .person-absent { border-left-color: #e74c3c; }
+        .person-item:hover {
+            background: rgba(255, 255, 255, 1);
+            transform: translateX(5px);
+        }
 
-        .person-status {
-            width: 12px;
-            height: 12px;
+        .person-present { border-left-color: var(--success-color); }
+        .person-absent { border-left-color: var(--danger-color); }
+
+        .person-avatar {
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
             margin-right: 1rem;
+            flex-shrink: 0;
         }
-
-        .status-present { background: #27ae60; }
-        .status-absent { background: #e74c3c; }
 
         .person-info {
             flex: 1;
         }
 
         .person-name {
-            font-weight: 500;
-            margin-bottom: 0.2rem;
+            font-weight: 600;
+            margin-bottom: 0.3rem;
+            color: var(--dark-color);
         }
 
         .person-details {
             font-size: 0.85rem;
-            color: #7f8c8d;
+            color: #64748b;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
         }
 
-        .refresh-btn {
+        .person-status {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .status-present { background: var(--success-color); }
+        .status-absent { background: var(--danger-color); }
+
+        .system-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .metric-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.8rem;
+            background: rgba(0,0,0,0.03);
+            border-radius: 8px;
+        }
+
+        .metric-label {
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+
+        .metric-value {
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 0.8rem;
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success-color);
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .status-pulse {
+            width: 8px;
+            height: 8px;
+            background: var(--success-color);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .floating-actions {
             position: fixed;
             bottom: 2rem;
             right: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            z-index: 1000;
+        }
+
+        .fab {
             width: 60px;
             height: 60px;
             border-radius: 50%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
             border: none;
             color: white;
-            font-size: 1.5rem;
+            font-size: 1.4rem;
             cursor: pointer;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            transition: all 0.3s ease;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        .refresh-btn:hover {
+        .fab:hover {
             transform: scale(1.1);
-            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .fab.secondary {
+            background: rgba(255, 255, 255, 0.9);
+            color: var(--primary-color);
+            font-size: 1.2rem;
         }
 
         .loading {
@@ -196,73 +417,167 @@
             to { transform: rotate(360deg); }
         }
 
-        .time-display {
+        .empty-state {
             text-align: center;
-            margin: 2rem 0;
-            padding: 1rem;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 15px;
-            color: white;
-            font-size: 1.2rem;
+            padding: 3rem 1rem;
+            color: #64748b;
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 0.5rem;
+            color: var(--dark-color);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-success {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success-color);
+        }
+
+        .badge-danger {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger-color);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(0,0,0,0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 1rem 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--success-color), var(--primary-color));
+            border-radius: 4px;
+            transition: width 0.5s ease;
         }
 
         @media (max-width: 768px) {
             .dashboard {
                 grid-template-columns: 1fr;
             }
+            
+            .header-content {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+            
             .header h1 {
                 font-size: 1.8rem;
             }
+            
             .container {
                 padding: 0 1rem;
+            }
+            
+            .stat-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .system-metrics {
+                grid-template-columns: 1fr;
             }
         }
     </style>
 </head>
 <body>
+    <div class="background-decoration"></div>
+    
     <div class="header">
         <div class="header-content">
-            <h1><i class="fas fa-shield-alt"></i> Рота "В"</h1>
-            <p>Электронный табель выхода в город</p>
-            <div class="time-display" id="currentTime"></div>
+            <div class="header-left">
+                <h1><i class="fas fa-shield-alt"></i> Рота "В"</h1>
+                <p>Электронный табель выхода в город</p>
+            </div>
+            <div class="time-display">
+                <span class="time" id="currentTime">--:--:--</span>
+                <span class="date" id="currentDate">-- -- ----</span>
+            </div>
         </div>
     </div>
 
     <div class="container">
         <div class="dashboard">
-            <!-- Статистика -->
+            <!-- Общая статистика -->
             <div class="card">
                 <div class="card-header">
-                    <div class="card-icon stats-icon">
-                        <i class="fas fa-chart-bar"></i>
+                    <div class="card-title-group">
+                        <div class="card-icon">
+                            <i class="fas fa-chart-pie"></i>
+                        </div>
+                        <div>
+                            <div class="card-title">Статистика</div>
+                            <div class="card-subtitle">Общие показатели</div>
+                        </div>
                     </div>
-                    <div class="card-title">Общая статистика</div>
+                    <span class="status-indicator">
+                        <span class="status-pulse"></span>
+                        Онлайн
+                    </span>
                 </div>
-                <div class="stat-number" id="totalPersonnel">0</div>
-                <div class="stat-label">Общая численность</div>
-                <div style="display: flex; justify-content: space-between; margin-top: 1rem;">
-                    <div>
-                        <div style="font-size: 1.5rem; font-weight: 600; color: #27ae60;" id="presentCount">0</div>
-                        <div style="color: #7f8c8d; font-size: 0.9rem;">В части</div>
+                
+                <div class="stat-grid">
+                    <div class="stat-item">
+                        <span class="stat-number" id="totalPersonnel">0</span>
+                        <div class="stat-label">Всего</div>
                     </div>
-                    <div>
-                        <div style="font-size: 1.5rem; font-weight: 600; color: #e74c3c;" id="absentCount">0</div>
-                        <div style="color: #7f8c8d; font-size: 0.9rem;">Убыли</div>
+                    <div class="stat-item">
+                        <span class="stat-number" id="presentCount" style="color: var(--success-color);">0</span>
+                        <div class="stat-label">В части</div>
                     </div>
+                    <div class="stat-item">
+                        <span class="stat-number" id="absentCount" style="color: var(--danger-color);">0</span>
+                        <div class="stat-label">Убыли</div>
+                    </div>
+                </div>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" id="presentProgress" style="width: 0%"></div>
+                </div>
+                <div style="text-align: center; color: #64748b; font-size: 0.9rem;">
+                    Процент присутствующих: <span id="presentPercentage">0%</span>
                 </div>
             </div>
 
             <!-- Присутствующие -->
             <div class="card">
                 <div class="card-header">
-                    <div class="card-icon present-icon">
-                        <i class="fas fa-home"></i>
+                    <div class="card-title-group">
+                        <div class="card-icon" style="background: linear-gradient(135deg, var(--success-color), #059669);">
+                            <i class="fas fa-home"></i>
+                        </div>
+                        <div>
+                            <div class="card-title">В части</div>
+                            <div class="card-subtitle">Присутствующие</div>
+                        </div>
                     </div>
-                    <div class="card-title">В части</div>
+                    <span class="badge badge-success" id="presentBadge">0</span>
                 </div>
+                
                 <div class="personnel-list" id="presentList">
-                    <div style="text-align: center; color: #7f8c8d; padding: 2rem;">
-                        <i class="fas fa-spinner fa-spin"></i> Загрузка...
+                    <div class="empty-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <h3>Загрузка...</h3>
                     </div>
                 </div>
             </div>
@@ -270,14 +585,22 @@
             <!-- Отсутствующие -->
             <div class="card">
                 <div class="card-header">
-                    <div class="card-icon absent-icon">
-                        <i class="fas fa-walking"></i>
+                    <div class="card-title-group">
+                        <div class="card-icon" style="background: linear-gradient(135deg, var(--danger-color), #dc2626);">
+                            <i class="fas fa-walking"></i>
+                        </div>
+                        <div>
+                            <div class="card-title">Убыли</div>
+                            <div class="card-subtitle">Отсутствующие</div>
+                        </div>
                     </div>
-                    <div class="card-title">Убыли</div>
+                    <span class="badge badge-danger" id="absentBadge">0</span>
                 </div>
+                
                 <div class="personnel-list" id="absentList">
-                    <div style="text-align: center; color: #7f8c8d; padding: 2rem;">
-                        <i class="fas fa-spinner fa-spin"></i> Загрузка...
+                    <div class="empty-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <h3>Загрузка...</h3>
                     </div>
                 </div>
             </div>
@@ -285,36 +608,56 @@
             <!-- Системная информация -->
             <div class="card">
                 <div class="card-header">
-                    <div class="card-icon system-icon">
-                        <i class="fas fa-cogs"></i>
+                    <div class="card-title-group">
+                        <div class="card-icon" style="background: linear-gradient(135deg, var(--info-color), #2563eb);">
+                            <i class="fas fa-server"></i>
+                        </div>
+                        <div>
+                            <div class="card-title">Система</div>
+                            <div class="card-subtitle">Мониторинг</div>
+                        </div>
                     </div>
-                    <div class="card-title">Система</div>
+                    <button class="btn-small" onclick="loadData()">
+                        <i class="fas fa-sync-alt"></i> Обновить
+                    </button>
                 </div>
-                <div style="padding: 1rem 0;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
-                        <span>Статус:</span>
-                        <span style="color: #27ae60; font-weight: 600;">
-                            <i class="fas fa-circle" style="font-size: 0.8rem;"></i> Активна
+                
+                <div class="system-metrics">
+                    <div class="metric-item">
+                        <span class="metric-label">Статус системы</span>
+                        <span class="metric-value" style="color: var(--success-color);">
+                            <i class="fas fa-circle" style="font-size: 0.6rem;"></i> Активна
                         </span>
                     </div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
-                        <span>Записей сегодня:</span>
-                        <span id="todayRecords" style="font-weight: 600;">0</span>
+                    <div class="metric-item">
+                        <span class="metric-label">Записей сегодня</span>
+                        <span class="metric-value" id="todayRecords">0</span>
                     </div>
-                    <div style="display: flex; justify-content: space-between;">
-                        <span>Последнее обновление:</span>
-                        <span id="lastUpdate" style="font-size: 0.9rem; color: #7f8c8d;">—</span>
+                    <div class="metric-item">
+                        <span class="metric-label">Последнее обновление</span>
+                        <span class="metric-value" id="lastUpdate">—</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Время работы</span>
+                        <span class="metric-value" id="uptime">—</span>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <button class="refresh-btn" onclick="loadData()" id="refreshBtn">
-        <i class="fas fa-sync-alt"></i>
-    </button>
+    <div class="floating-actions">
+        <button class="fab secondary" onclick="exportData()" title="Экспорт данных">
+            <i class="fas fa-download"></i>
+        </button>
+        <button class="fab" onclick="loadData()" id="refreshBtn" title="Обновить данные">
+            <i class="fas fa-sync-alt"></i>
+        </button>
+    </div>
 
     <script>
+        let startTime = Date.now();
+        
         function updateTime() {
             const now = new Date();
             const options = {
@@ -332,9 +675,18 @@
             const date = `${parts[0].value}.${parts[2].value}.${parts[4].value}`;
             const time = `${parts[6].value}:${parts[8].value}:${parts[10].value}`;
 
-            document.getElementById('currentTime').innerHTML = `
-                <i class="fas fa-clock"></i> ${date} | ${time} (Калининград)
-            `;
+            document.getElementById('currentTime').textContent = time;
+            document.getElementById('currentDate').textContent = `${date} (Калининград)`;
+            
+            // Обновляем время работы
+            const uptime = Math.floor((Date.now() - startTime) / 1000);
+            const hours = Math.floor(uptime / 3600);
+            const minutes = Math.floor((uptime % 3600) / 60);
+            document.getElementById('uptime').textContent = `${hours}ч ${minutes}м`;
+        }
+
+        function getInitials(name) {
+            return name.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2);
         }
 
         function loadData() {
@@ -354,6 +706,7 @@
                 })
                 .catch(error => {
                     console.error('Ошибка загрузки данных:', error);
+                    showError('Ошибка загрузки данных');
                 })
                 .finally(() => {
                     refreshBtn.classList.remove('loading');
@@ -362,9 +715,18 @@
         }
 
         function updateStats(data) {
-            document.getElementById('totalPersonnel').textContent = data.total_soldiers;
-            document.getElementById('presentCount').textContent = data.present_count;
-            document.getElementById('absentCount').textContent = data.absent_count;
+            const total = data.total || 0;
+            const present = data.present || 0;
+            const absent = data.absent || 0;
+            const percentage = total > 0 ? Math.round((present / total) * 100) : 0;
+
+            document.getElementById('totalPersonnel').textContent = total;
+            document.getElementById('presentCount').textContent = present;
+            document.getElementById('absentCount').textContent = absent;
+            document.getElementById('presentBadge').textContent = present;
+            document.getElementById('absentBadge').textContent = absent;
+            document.getElementById('presentPercentage').textContent = percentage + '%';
+            document.getElementById('presentProgress').style.width = percentage + '%';
             document.getElementById('todayRecords').textContent = data.today_records || 0;
         }
 
@@ -375,51 +737,85 @@
             presentList.innerHTML = '';
             absentList.innerHTML = '';
 
-            if (data.present.length === 0) {
+            if (!data.present_list || data.present_list.length === 0) {
                 presentList.innerHTML = `
-                    <div style="text-align: center; color: #7f8c8d; padding: 2rem;">
-                        <i class="fas fa-user-slash"></i><br>Никого нет в части
+                    <div class="empty-state">
+                        <i class="fas fa-user-slash"></i>
+                        <h3>Никого нет в части</h3>
+                        <p>Все бойцы находятся вне расположения</p>
                     </div>
                 `;
             } else {
-                data.present.forEach(person => {
+                data.present_list.forEach(person => {
                     presentList.innerHTML += `
                         <div class="person-item person-present">
-                            <div class="person-status status-present"></div>
+                            <div class="person-avatar">${getInitials(person.name)}</div>
                             <div class="person-info">
                                 <div class="person-name">${person.name}</div>
                                 <div class="person-details">
-                                    <i class="fas fa-map-marker-alt"></i> ${person.location} | 
-                                    <i class="fas fa-clock"></i> ${person.time}
+                                    <span><i class="fas fa-map-marker-alt"></i> ${person.location}</span>
+                                    <span><i class="fas fa-clock"></i> ${person.time}</span>
                                 </div>
                             </div>
+                            <div class="person-status status-present"></div>
                         </div>
                     `;
                 });
             }
 
-            if (data.absent.length === 0) {
+            if (!data.absent_list || data.absent_list.length === 0) {
                 absentList.innerHTML = `
-                    <div style="text-align: center; color: #7f8c8d; padding: 2rem;">
-                        <i class="fas fa-users"></i><br>Все в части
+                    <div class="empty-state">
+                        <i class="fas fa-users"></i>
+                        <h3>Все в части</h3>
+                        <p>Все бойцы находятся в расположении</p>
                     </div>
                 `;
             } else {
-                data.absent.forEach(person => {
+                data.absent_list.forEach(person => {
                     absentList.innerHTML += `
                         <div class="person-item person-absent">
-                            <div class="person-status status-absent"></div>
+                            <div class="person-avatar">${getInitials(person.name)}</div>
                             <div class="person-info">
                                 <div class="person-name">${person.name}</div>
                                 <div class="person-details">
-                                    <i class="fas fa-map-marker-alt"></i> ${person.location} | 
-                                    <i class="fas fa-clock"></i> ${person.time}
+                                    <span><i class="fas fa-map-marker-alt"></i> ${person.location}</span>
+                                    <span><i class="fas fa-clock"></i> ${person.time}</span>
                                 </div>
                             </div>
+                            <div class="person-status status-absent"></div>
                         </div>
                     `;
                 });
             }
+        }
+
+        function exportData() {
+            // Placeholder для функции экспорта
+            alert('Функция экспорта будет добавлена в следующем обновлении');
+        }
+
+        function showError(message) {
+            // Простое уведомление об ошибке
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 2rem;
+                right: 2rem;
+                background: var(--danger-color);
+                color: white;
+                padding: 1rem 1.5rem;
+                border-radius: 8px;
+                box-shadow: var(--shadow);
+                z-index: 1001;
+                animation: slideIn 0.3s ease;
+            `;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
         }
 
         // Инициализация

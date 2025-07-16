@@ -91,6 +91,10 @@ def api_stats():
             'admins': admins_count,
             'present_list': present_list,
             'absent_list': absent_list,
+            'present_count': len(present_list),
+            'absent_count': len(absent_list),
+            'total_soldiers': len(soldiers),
+            'today_records': len(present_list) + len(absent_list),  # Примерное значение
             'last_updated': datetime.now(KALININGRAD_TZ).strftime('%H:%M:%S')
         }
 
