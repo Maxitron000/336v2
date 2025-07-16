@@ -191,10 +191,52 @@ class Handlers:
             return
         elif state == 'waiting_for_personnel_name':
             name = update.message.text.strip()
-            filters = self.user_states.get(user_id, {}).get('personnel_filters', {})
-            filters['name'] = name
-            self.user_states[user_id]['personnel_filters'] = filters
-            await self.show_personnel_management(update, context, None)
+            soldiers, _, _ = self.db.get_users_list(page=1, per_page=10000)
+            matches = [s for s in soldiers if name.lower() in s['full_name'].lower()]
+            if not matches:
+                await update.message.reply_text("Нет совпадений по ФИО. Попробуйте ещё раз:")
+                return
+            if len(matches) == 1:
+                filters = self.user_states.get(user_id, {}).get('personnel_filters', {})
+                filters['name'] = matches[0]['full_name']
+                self.user_states[user_id]['personnel_filters'] = filters
+                del self.user_states[user_id]['state']
+                await self.show_personnel_management(update, context, None)
+                return
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton(s['full_name'], callback_data=f"personnel_name_exact_{s['id']}")]
+                for s in matches[:10]
+            ]
+            await update.message.reply_text(
+                "Выберите бойца:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        # Живой поиск по ФИО в журнале
+        elif state == 'waiting_for_journal_soldier_name':
+            name = update.message.text.strip()
+            soldiers, _, _ = self.db.get_users_list(page=1, per_page=10000)
+            matches = [s for s in soldiers if name.lower() in s['full_name'].lower()]
+            if not matches:
+                await update.message.reply_text("Нет совпадений по ФИО. Попробуйте ещё раз:")
+                return
+            if len(matches) == 1:
+                filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+                filters['soldier'] = matches[0]['full_name']
+                self.user_states[user_id]['journal_filters'] = filters
+                del self.user_states[user_id]['state']
+                await self.show_journal_management(update, context, None)
+                return
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton(s['full_name'], callback_data=f"journal_soldier_exact_{s['id']}")]
+                for s in matches[:10]
+            ]
+            await update.message.reply_text(
+                "Выберите бойца:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
             return
         else:
             await update.message.reply_text("Используйте кнопки меню для навигации.")
@@ -750,6 +792,26 @@ class Handlers:
             if user_id not in self.user_states:
                 self.user_states[user_id] = {}
             self.user_states[user_id]['personnel_page'] = 1
+        elif data.startswith("personnel_name_exact_"):
+            soldier_id = int(data.split("_", 3)[3])
+            soldier = self.db.get_user(soldier_id)
+            filters = self.user_states.get(user_id, {}).get('personnel_filters', {})
+            filters['name'] = soldier['full_name']
+            self.user_states[user_id]['personnel_filters'] = filters
+            if 'state' in self.user_states[user_id]:
+                del self.user_states[user_id]['state']
+            await self.show_personnel_management(update, context, query)
+            return
+        elif data.startswith("journal_soldier_exact_"):
+            soldier_id = int(data.split("_", 3)[3])
+            soldier = self.db.get_user(soldier_id)
+            filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+            filters['soldier'] = soldier['full_name']
+            self.user_states[user_id]['journal_filters'] = filters
+            if 'state' in self.user_states[user_id]:
+                del self.user_states[user_id]['state']
+            await self.show_journal_management(update, context, query)
+            return
         else:
             await query.edit_message_text(
                 "Функция в разработке или недоступна.",
@@ -1311,6 +1373,26 @@ class Handlers:
             if user_id not in self.user_states:
                 self.user_states[user_id] = {}
             self.user_states[user_id]['personnel_page'] = 1
+        elif data.startswith("personnel_name_exact_"):
+            soldier_id = int(data.split("_", 3)[3])
+            soldier = self.db.get_user(soldier_id)
+            filters = self.user_states.get(user_id, {}).get('personnel_filters', {})
+            filters['name'] = soldier['full_name']
+            self.user_states[user_id]['personnel_filters'] = filters
+            if 'state' in self.user_states[user_id]:
+                del self.user_states[user_id]['state']
+            await self.show_personnel_management(update, context, query)
+            return
+        elif data.startswith("journal_soldier_exact_"):
+            soldier_id = int(data.split("_", 3)[3])
+            soldier = self.db.get_user(soldier_id)
+            filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+            filters['soldier'] = soldier['full_name']
+            self.user_states[user_id]['journal_filters'] = filters
+            if 'state' in self.user_states[user_id]:
+                del self.user_states[user_id]['state']
+            await self.show_journal_management(update, context, query)
+            return
         else:
             await query.edit_message_text(
                 "Функция в разработке или недоступна.",
