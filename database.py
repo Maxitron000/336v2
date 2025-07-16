@@ -280,3 +280,86 @@ class Database:
         conn.close()
         
         return deleted_count
+    
+    def get_all_admins(self) -> List[Dict]:
+        """Получение списка всех администраторов"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT u.id, u.username, u.full_name, a.permissions
+            FROM users u
+            JOIN admins a ON u.id = a.id
+            WHERE u.is_admin = TRUE
+            ORDER BY u.full_name
+        ''')
+        
+        results = cursor.fetchall()
+        conn.close()
+        
+        return [
+            {
+                'id': row[0],
+                'username': row[1],
+                'full_name': row[2],
+                'permissions': row[3]
+            }
+            for row in results
+        ]
+    
+    def add_admin(self, user_id: int, permissions: str = "basic") -> bool:
+        """Добавление нового администратора"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            
+            # Обновляем статус пользователя
+            cursor.execute('''
+                UPDATE users SET is_admin = TRUE WHERE id = ?
+            ''', (user_id,))
+            
+            # Добавляем в таблицу админов
+            user = self.get_user(user_id)
+            if user:
+                cursor.execute('''
+                    INSERT OR REPLACE INTO admins (id, username, permissions, appointed_by)
+                    VALUES (?, ?, ?, ?)
+                ''', (user_id, user['username'], permissions, MAIN_ADMIN_ID))
+            
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Ошибка добавления админа: {e}")
+            return False
+    
+    def remove_admin(self, user_id: int) -> bool:
+        """Удаление администратора"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            
+            # Нельзя удалить главного админа
+            if user_id == MAIN_ADMIN_ID:
+                return False
+            
+            # Обновляем статус пользователя
+            cursor.execute('''
+                UPDATE users SET is_admin = FALSE WHERE id = ?
+            ''', (user_id,))
+            
+            # Удаляем из таблицы админов
+            cursor.execute('''
+                DELETE FROM admins WHERE id = ?
+            ''', (user_id,))
+            
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Ошибка удаления админа: {e}")
+            return False
+    
+    def get_user_by_id(self, user_id: int) -> Optional[Dict]:
+        """Получение пользователя по ID"""
+        return self.get_user(user_id)

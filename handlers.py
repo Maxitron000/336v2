@@ -49,6 +49,8 @@ class Handlers:
             await self.handle_name_input(update, context)
         elif state == 'waiting_for_custom_location':
             await self.handle_custom_location(update, context)
+        elif state == 'waiting_for_admin_id':
+            await self.handle_admin_id_input(update, context)
         else:
             await update.message.reply_text("Используйте кнопки меню для навигации.")
     
@@ -168,6 +170,10 @@ class Handlers:
         
         elif data.startswith("admin_"):
             await self.handle_admin_actions(update, context, query, data, is_main_admin)
+        elif data.startswith("remove_admin_"):
+            await self.handle_remove_admin(update, context, query, data)
+        elif data.startswith("confirm_"):
+            await self.handle_confirmation(update, context, query, data)
         
         elif data == "cancel":
             await self.show_main_menu(update, context, is_admin, query)
@@ -311,6 +317,10 @@ class Handlers:
             await self.export_admin_data(update, context, query)
         elif data == "admin_manage" and is_main_admin:
             await self.show_admin_management(update, context, query)
+        elif data == "admin_add" and is_main_admin:
+            await self.add_admin(update, context, query)
+        elif data == "admin_remove" and is_main_admin:
+            await self.remove_admin(update, context, query)
         else:
             await query.edit_message_text(
                 "Функция в разработке или недоступна.",
@@ -428,3 +438,107 @@ class Handlers:
         keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_manage")])
         
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    async def handle_admin_id_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработка ввода ID админа"""
+        user_id = update.effective_user.id
+        admin_id_text = update.message.text.strip()
+        
+        try:
+            admin_id = int(admin_id_text)
+        except ValueError:
+            await update.message.reply_text(
+                "❌ Неверный формат ID!\n"
+                "ID должен быть числом.\n"
+                "Попробуйте еще раз:"
+            )
+            return
+        
+        # Проверяем, существует ли пользователь
+        target_user = self.db.get_user_by_id(admin_id)
+        if not target_user:
+            await update.message.reply_text(
+                "❌ Пользователь с таким ID не найден!\n"
+                "Убедитесь, что пользователь уже зарегистрирован в боте.\n"
+                "Попробуйте еще раз:"
+            )
+            return
+        
+        # Проверяем, не является ли уже админом
+        if self.db.is_admin(admin_id):
+            await update.message.reply_text(
+                f"❌ Пользователь {target_user['full_name']} уже является администратором!"
+            )
+            del self.user_states[user_id]
+            is_admin = self.db.is_admin(user_id)
+            await self.show_main_menu(update, context, is_admin)
+            return
+        
+        # Добавляем админа
+        if self.db.add_admin(admin_id):
+            del self.user_states[user_id]
+            await update.message.reply_text(
+                f"✅ Администратор {target_user['full_name']} успешно добавлен!"
+            )
+            
+            # Уведомляем нового админа
+            await context.bot.send_message(
+                admin_id,
+                f"🎉 Поздравляем! Вам предоставлены права администратора в системе электронного табеля."
+            )
+            
+            is_admin = self.db.is_admin(user_id)
+            await self.show_main_menu(update, context, is_admin)
+        else:
+            await update.message.reply_text(
+                "❌ Ошибка при добавлении администратора. Попробуйте еще раз."
+            )
+    
+    async def handle_remove_admin(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query, data: str):
+        """Обработка удаления админа"""
+        admin_id = int(data.split("_")[2])
+        admin = self.db.get_user_by_id(admin_id)
+        
+        if not admin:
+            await query.edit_message_text(
+                "❌ Пользователь не найден.",
+                reply_markup=get_back_keyboard("admin_manage")
+            )
+            return
+        
+        keyboard = get_confirm_keyboard("remove_admin", str(admin_id))
+        text = f"⚠️ Подтвердите удаление администратора:\n\n👤 {admin['full_name']}\n@{admin['username']}\n\nВы уверены?"
+        
+        await query.edit_message_text(text, reply_markup=keyboard)
+    
+    async def handle_confirmation(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query, data: str):
+        """Обработка подтверждений"""
+        parts = data.split("_", 2)
+        action = parts[1]
+        target_id = parts[2] if len(parts) > 2 else ""
+        
+        if action == "remove_admin":
+            admin_id = int(target_id)
+            admin = self.db.get_user_by_id(admin_id)
+            
+            if self.db.remove_admin(admin_id):
+                await query.edit_message_text(
+                    f"✅ Администратор {admin['full_name']} успешно удален!",
+                    reply_markup=get_back_keyboard("admin_manage")
+                )
+                
+                # Уведомляем удаленного админа
+                await context.bot.send_message(
+                    admin_id,
+                    "ℹ️ Ваши права администратора были отозваны."
+                )
+            else:
+                await query.edit_message_text(
+                    "❌ Ошибка при удалении администратора.",
+                    reply_markup=get_back_keyboard("admin_manage")
+                )
+        else:
+            await query.edit_message_text(
+                "❌ Неизвестное действие.",
+                reply_markup=get_back_keyboard("admin_manage")
+            )
