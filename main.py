@@ -8,6 +8,7 @@ from telegram import Update
 import time
 from datetime import datetime, timedelta
 import json, os
+from random_phrases import get_random_phrase
 
 # Настройка логирования
 logging.basicConfig(
@@ -69,7 +70,7 @@ async def send_reminders(application):
                 try:
                     await application.bot.send_message(
                         user['id'],
-                        "⏰ Напоминание! Не забудьте отметить приход в часть."
+                        get_random_phrase(),
                     )
                 except Exception as e:
                     print(f"Ошибка отправки напоминания бойцу {user['id']}: {e}")
