@@ -30,7 +30,9 @@ async def main():
 
     scheduler = AsyncIOScheduler()
     # scheduler.add_job(..., trigger='cron', ...) # Добавить задачи напоминаний и очистки
-    scheduler.start()
+    # scheduler.start()
+    from handlers.notifications import setup_scheduler
+    setup_scheduler(bot)
 
     await on_startup(bot)
     await dp.start_polling(bot)

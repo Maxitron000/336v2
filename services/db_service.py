@@ -30,6 +30,39 @@ class DBService:
                 return {"users": row[0] if row else 0}
 
     @staticmethod
+    async def add_record(user_id: int, action: str, location: str, comment: str = None):
+        async with aiosqlite.connect(DB_NAME) as db:
+            await db.execute(
+                "INSERT INTO records (user_id, action, location, comment) VALUES (?, ?, ?, ?)",
+                (user_id, action, location, comment)
+            )
+            await db.commit()
+
+    @staticmethod
+    async def get_user_records(user_id: int, limit: int = 10):
+        async with aiosqlite.connect(DB_NAME) as db:
+            async with db.execute(
+                "SELECT id, action, location, timestamp, comment FROM records WHERE user_id = ? ORDER BY timestamp DESC LIMIT ?",
+                (user_id, limit)
+            ) as cursor:
+                return [
+                    {"id": row[0], "action": row[1], "location": row[2], "timestamp": row[3], "comment": row[4]}
+                    async for row in cursor
+                ]
+
+    @staticmethod
+    async def get_all_records(days: int = 30):
+        async with aiosqlite.connect(DB_NAME) as db:
+            async with db.execute(
+                "SELECT id, user_id, action, location, timestamp, comment FROM records WHERE timestamp >= datetime('now', ?) ORDER BY timestamp DESC",
+                (f'-{days} days',)
+            ) as cursor:
+                return [
+                    {"id": row[0], "user_id": row[1], "action": row[2], "location": row[3], "timestamp": row[4], "comment": row[5]}
+                    async for row in cursor
+                ]
+
+    @staticmethod
     async def export_to_excel():
-        # Заглушка: возвращает путь к файлу
+        # TODO: Реализовать экспорт в Excel асинхронно
         return "export.xlsx"

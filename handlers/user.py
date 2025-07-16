@@ -34,3 +34,22 @@ async def cmd_profile(message: types.Message):
         await message.answer(f"{get_text('profile', message.from_user.language_code)}\n{user['full_name']}")
     else:
         await message.answer(get_text("error", message.from_user.language_code))
+
+@router.message(Command("leave"))
+async def cmd_leave(message: types.Message):
+    await DBService.add_record(message.from_user.id, "убыл", "-", None)
+    await message.answer("Вы отметили уход (убыл)")
+
+@router.message(Command("arrive"))
+async def cmd_arrive(message: types.Message):
+    await DBService.add_record(message.from_user.id, "прибыл", "-", None)
+    await message.answer("Вы отметили приход (прибыл)")
+
+@router.message(Command("journal"))
+async def cmd_journal(message: types.Message):
+    records = await DBService.get_user_records(message.from_user.id, limit=10)
+    if not records:
+        await message.answer("Нет записей в журнале.")
+        return
+    text = "\n".join([f"{r['timestamp']}: {r['action']} — {r['location']}" for r in records])
+    await message.answer(f"Ваш журнал:\n{text}")
