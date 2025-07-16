@@ -8,3 +8,15 @@ run = ["sh", "-c", "python main.py"]
 [nix]
 channel = "stable-24_05"
 packages = ["glibcLocales"]
+
+[workflows]
+runButton = "Run Bot"
+
+[[workflows.workflow]]
+name = "Run Bot"
+author = 44716284
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"
