@@ -193,22 +193,23 @@ class Database:
             for row in results
         ]
     
-    def get_all_records(self, days: int = 30) -> List[Dict]:
+    def get_all_records(self, days: int = 30, order_by_time_only: bool = False) -> List[Dict]:
         """Получение всех записей за период"""
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
-        
-        cursor.execute('''
+        if order_by_time_only:
+            order = 'r.timestamp DESC'
+        else:
+            order = 'u.full_name, r.timestamp DESC'
+        cursor.execute(f'''
             SELECT r.id, u.full_name, r.action, r.location, r.timestamp, r.comment
             FROM records r
             JOIN users u ON r.user_id = u.id
-            WHERE r.timestamp >= datetime('now', '-{} days')
-            ORDER BY u.full_name, r.timestamp DESC
-        '''.format(days))
-        
+            WHERE r.timestamp >= datetime('now', '-{days} days')
+            ORDER BY {order}
+        ''')
         results = cursor.fetchall()
         conn.close()
-        
         return [
             {
                 'id': row[0],
@@ -268,7 +269,7 @@ class Database:
     
     def export_to_excel(self, days: int = 30) -> str:
         """Экспорт данных в Excel"""
-        records = self.get_all_records(days)
+        records = self.get_all_records(days, order_by_time_only=True)
         
         if not records:
             return None
