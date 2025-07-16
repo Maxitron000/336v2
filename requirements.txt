@@ -1,6 +1,8 @@
-aiogram
-aiosqlite
-APScheduler
-pytest
-openpyxl
-pandas
+
+aiogram==3.21.0
+aiosqlite==0.21.0
+apscheduler==3.11.0
+flask==3.1.0
+python-dotenv==1.0.0
+openpyxl==3.1.2
+pytz==2024.1
