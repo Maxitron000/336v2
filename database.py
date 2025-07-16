@@ -203,7 +203,7 @@ class Database:
             FROM records r
             JOIN users u ON r.user_id = u.id
             WHERE r.timestamp >= datetime('now', '-{} days')
-            ORDER BY r.timestamp DESC
+            ORDER BY u.full_name, r.timestamp DESC
         '''.format(days))
         
         results = cursor.fetchall()

@@ -376,6 +376,7 @@ class Handlers:
                 locations[location].append(soldier['full_name'])
             
             for location, soldiers in locations.items():
+                soldiers = sorted(soldiers)
                 text += f"📍 {location}:\n"
                 for soldier in soldiers:
                     text += f"  • {soldier}\n"
