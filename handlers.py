@@ -164,6 +164,31 @@ class Handlers:
             is_admin = self.db.is_admin(user_id)
             await self.show_main_menu(update, context, is_admin)
             return
+        elif state == 'waiting_for_time_soldiers':
+            time_str = update.message.text.strip()
+            import re
+            if not re.match(r'^([01]?\d|2[0-3]):[0-5]\d$', time_str):
+                await update.message.reply_text("Неверный формат времени! Введите в формате ЧЧ:ММ, например, 18:40:")
+                return
+            # Сохраняем глобально (в settings.json или в базе, если потребуется)
+            self.save_global_notification_time('soldiers', time_str)
+            await update.message.reply_text(f"✅ Время напоминания для бойцов установлено: {time_str}")
+            del self.user_states[user_id]
+            is_admin = self.db.is_admin(user_id)
+            await self.show_main_menu(update, context, is_admin)
+            return
+        elif state == 'waiting_for_time_admins':
+            time_str = update.message.text.strip()
+            import re
+            if not re.match(r'^([01]?\d|2[0-3]):[0-5]\d$', time_str):
+                await update.message.reply_text("Неверный формат времени! Введите в формате ЧЧ:ММ, например, 19:00:")
+                return
+            self.save_global_notification_time('admins', time_str)
+            await update.message.reply_text(f"✅ Время напоминания для админов установлено: {time_str}")
+            del self.user_states[user_id]
+            is_admin = self.db.is_admin(user_id)
+            await self.show_main_menu(update, context, is_admin)
+            return
         else:
             await update.message.reply_text("Используйте кнопки меню для навигации.")
     
@@ -354,6 +379,20 @@ class Handlers:
                 await query.edit_message_text("❌ Ошибка при удалении бойца.", reply_markup=get_back_keyboard("admin_personnel"))
             if user_id in self.user_states:
                 del self.user_states[user_id]
+            return
+        elif data == "setnotif_time_soldiers":
+            self.user_states[user_id] = {"state": "waiting_for_time_soldiers"}
+            await query.edit_message_text(
+                "Введите новое время напоминания для бойцов (например, 18:40):",
+                reply_markup=get_back_keyboard("settings_notifications")
+            )
+            return
+        elif data == "setnotif_time_admins":
+            self.user_states[user_id] = {"state": "waiting_for_time_admins"}
+            await query.edit_message_text(
+                "Введите новое время напоминания для админов (например, 19:00):",
+                reply_markup=get_back_keyboard("settings_notifications")
+            )
             return
     
     async def show_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
@@ -601,224 +640,17 @@ class Handlers:
     
     async def set_notification_time(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
         """Настройка времени уведомлений"""
-        text = "⏰ Настройка времени уведомлений\n\n🔧 Функция в разработке"
-        
-        await query.edit_message_text(text, reply_markup=get_back_keyboard("settings_notifications"))
-    
-    async def set_notification_recipients(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
-        """Настройка получателей уведомлений"""
-        text = "👥 Настройка получателей уведомлений\n\n🔧 Функция в разработке"
-        
-        await query.edit_message_text(text, reply_markup=get_back_keyboard("settings_notifications"))
-    
-    async def toggle_silent_mode(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
-        """Переключить режим тишины"""
-        text = "🔇 Режим тишины переключен!\n\n🔕 Уведомления будут отправляться без звука."
-        
-        await query.edit_message_text(text, reply_markup=get_back_keyboard("settings_notifications"))
-    
-    async def edit_soldier_name(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
-        """Редактирование ФИО бойца"""
-        # Получаем всех бойцов по алфавиту
-        soldiers, _, _ = self.db.get_users_list(page=1, per_page=10000)
-        if not soldiers:
-            await query.edit_message_text("Нет бойцов для редактирования.", reply_markup=get_back_keyboard("admin_personnel"))
-            return
-        # Формируем клавиатуру выбора бойца
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         keyboard = [
-            [InlineKeyboardButton(f"{s['full_name']}", callback_data=f"editname_{s['id']}")]
-            for s in soldiers
+            [InlineKeyboardButton("Для бойцов", callback_data="setnotif_time_soldiers")],
+            [InlineKeyboardButton("Для админов", callback_data="setnotif_time_admins")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="settings_notifications")]
         ]
-        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_personnel")])
         await query.edit_message_text(
-            "✏️ Выберите бойца для смены ФИО:",
+            "Выберите, для кого изменить время напоминаний:",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
-    async def add_new_soldier(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
-        """Добавление нового бойца"""
-        user_id = update.effective_user.id
-        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-        keyboard = [
-            [InlineKeyboardButton("По Telegram ID", callback_data="addsoldier_tgid")],
-            [InlineKeyboardButton("Вручную", callback_data="addsoldier_manual")],
-            [InlineKeyboardButton("🔙 Назад", callback_data="admin_personnel")]
-        ]
-        await query.edit_message_text(
-            "Выберите способ добавления бойца:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-
-    async def remove_soldier(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
-        """Удаление бойца"""
-        # Получаем всех бойцов по алфавиту
-        soldiers, _, _ = self.db.get_users_list(page=1, per_page=10000)
-        if not soldiers:
-            await query.edit_message_text("Нет бойцов для удаления.", reply_markup=get_back_keyboard("admin_personnel"))
-            return
-        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-        keyboard = [
-            [InlineKeyboardButton(f"{s['full_name']}", callback_data=f"removesoldier_{s['id']}")]
-            for s in soldiers
-        ]
-        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_personnel")])
-        await query.edit_message_text(
-            "❌ Выберите бойца для удаления:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-
-    async def export_journal_data(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
-        """Экспорт данных журнала"""
-        try:
-            filename = self.db.export_to_excel(30)
-            if filename:
-                with open(filename, 'rb') as file:
-                    await context.bot.send_document(
-                        chat_id=update.effective_chat.id,
-                        document=file,
-                        caption="📥 Экспорт журнала за последние 30 дней"
-                    )
-                await query.edit_message_text(
-                    "✅ Журнал успешно экспортирован!",
-                    reply_markup=get_back_keyboard("admin_journal")
-                )
-            else:
-                await query.edit_message_text(
-                    "❌ Нет данных для экспорта.",
-                    reply_markup=get_back_keyboard("admin_journal")
-                )
-        except Exception as e:
-            await query.edit_message_text(
-                f"❌ Ошибка при экспорте: {str(e)}",
-                reply_markup=get_back_keyboard("admin_journal")
-            )
-    
-    async def show_journal_statistics(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
-        """Показать статистику журнала"""
-        stats = self.db.get_statistics(30)
-        
-        text = "📊 Статистика журнала за последние 30 дней:\n\n"
-        text += f"📈 Всего записей: {stats['total_records']}\n"
-        text += f"👥 Активных пользователей: {stats['active_users']}\n\n"
-        
-        text += "📊 По действиям:\n"
-        for action, count in stats['action_stats'].items():
-            emoji = "🚶" if action == "убыл" else "🏠"
-            text += f"{emoji} {action}: {count}\n"
-        
-        text += "\n🏆 Топ локаций:\n"
-        for i, (location, count) in enumerate(list(stats['location_stats'].items())[:5], 1):
-            text += f"{i}. {location}: {count}\n"
-        
-        await query.edit_message_text(text, reply_markup=get_back_keyboard("admin_journal"))
-    
-    async def show_journal_records(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
-        """Показать записи журнала"""
-        records = self.db.get_all_records(7)  # За последнюю неделю
-        
-        if not records:
-            text = "📋 Записей в журнале за последнюю неделю не найдено."
-        else:
-            text = "📋 Записи журнала за последнюю неделю:\n\n"
-            for record in records[:10]:  # Показываем только первые 10
-                timestamp = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
-                formatted_time = timestamp.strftime('%d.%m.%Y %H:%M')
-                action_emoji = "🚶" if record['action'] == "убыл" else "🏠"
-                text += f"👤 {record['full_name']}\n"
-                text += f"{action_emoji} {record['action']} - {record['location']}\n"
-                text += f"⏰ {formatted_time}\n\n"
-            
-            if len(records) > 10:
-                text += f"... и еще {len(records) - 10} записей"
-        
-        await query.edit_message_text(text, reply_markup=get_back_keyboard("admin_journal"))
-    
-    async def handle_admin_actions(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
-                                 query, data: str, is_main_admin: bool):
-        """Обработка админских действий - Уровень 1"""
-        if data == "admin_panel":
-            await self.show_admin_panel(update, context, query, is_main_admin)
-        elif data == "admin_summary":
-            await self.show_admin_summary(update, context, query)
-        elif data == "admin_personnel":
-            await self.show_personnel_management(update, context, query)
-        elif data == "admin_journal":
-            await self.show_journal_management(update, context, query)
-        elif data == "admin_settings":
-            await self.show_settings_panel(update, context, query, is_main_admin)
-        elif data == "admin_manage" and is_main_admin:
-            await self.show_admin_management(update, context, query)
-        elif data == "admin_add" and is_main_admin:
-            await self.add_admin(update, context, query)
-        elif data == "admin_remove" and is_main_admin:
-            await self.remove_admin(update, context, query)
-        else:
-            await query.edit_message_text(
-                "Функция в разработке или недоступна.",
-                reply_markup=get_back_keyboard("admin_panel")
-            )
-    
-    async def handle_personnel_actions(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
-                                     query, data: str, is_main_admin: bool):
-        """Обработка действий с личным составом"""
-        if data == "personnel_edit_name":
-            await self.edit_soldier_name(update, context, query)
-        elif data == "personnel_add":
-            await self.add_new_soldier(update, context, query)
-        elif data == "personnel_remove":
-            await self.remove_soldier(update, context, query)
-        else:
-            await query.edit_message_text(
-                "Функция в разработке или недоступна.",
-                reply_markup=get_back_keyboard("admin_personnel")
-            )
-    
-    async def handle_journal_actions(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
-                                   query, data: str, is_main_admin: bool):
-        """Обработка действий с журналом"""
-        if data == "journal_export":
-            await self.export_journal_data(update, context, query)
-        elif data == "journal_stats":
-            await self.show_journal_statistics(update, context, query)
-        elif data == "journal_records":
-            await self.show_journal_records(update, context, query)
-        else:
-            await query.edit_message_text(
-                "Функция в разработке или недоступна.",
-                reply_markup=get_back_keyboard("admin_journal")
-            )
-    
-    async def handle_settings_actions(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
-                                    query, data: str, is_main_admin: bool):
-        """Обработка настроек"""
-        if data == "settings_notifications":
-            await self.show_notifications_settings(update, context, query)
-        elif data == "settings_general":
-            await self.show_general_settings(update, context, query)
-        elif data == "settings_danger_zone" and is_main_admin:
-            await self.show_danger_zone(update, context, query)
-        else:
-            await query.edit_message_text(
-                "Функция в разработке или недоступна.",
-                reply_markup=get_back_keyboard("admin_settings")
-            )
-    
-    async def handle_danger_actions(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
-                                  query, data: str, is_main_admin: bool):
-        """Обработка опасных действий"""
-        if data == "danger_mark_all_arrived":
-            await self.mark_all_arrived(update, context, query)
-        elif data == "danger_clear_all_data":
-            await self.clear_all_data(update, context, query)
-        elif data == "danger_reset_settings":
-            await self.reset_settings(update, context, query)
-        else:
-            await query.edit_message_text(
-                "Функция в разработке или недоступна.",
-                reply_markup=get_back_keyboard("settings_danger_zone")
-            )
-    
     async def handle_notification_actions(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
                                         query, data: str, is_main_admin: bool):
         """Обработка настроек уведомлений"""
@@ -1078,3 +910,19 @@ class Handlers:
                 "❌ Неизвестное действие.",
                 reply_markup=get_back_keyboard("admin_panel")
             )
+
+    def save_global_notification_time(self, group: str, time_str: str):
+        """Сохраняет время напоминаний в файл notification_times.json"""
+        import json
+        import os
+        fname = 'notification_times.json'
+        data = {"soldiers": "18:40", "admins": "19:00"}
+        if os.path.exists(fname):
+            try:
+                with open(fname, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            except Exception:
+                pass
+        data[group] = time_str
+        with open(fname, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False)
