@@ -589,6 +589,80 @@ class Handlers:
                     reply_markup=get_back_keyboard("admin_journal")
                 )
             return
+        elif data == "stats_filter_period":
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton("Сегодня", callback_data="stats_period_today")],
+                [InlineKeyboardButton("Вчера", callback_data="stats_period_yesterday")],
+                [InlineKeyboardButton("Неделя", callback_data="stats_period_week")],
+                [InlineKeyboardButton("Месяц", callback_data="stats_period_month")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_journal")]
+            ]
+            await query.edit_message_text(
+                "Выберите период:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        elif data.startswith("stats_period_"):
+            period = data.split("_")[2]
+            filters = self.user_states.get(user_id, {}).get('stats_filters', {})
+            filters['period'] = {
+                'today': 'Сегодня',
+                'yesterday': 'Вчера',
+                'week': 'Неделя',
+                'month': 'Месяц',
+            }.get(period, 'Месяц')
+            if user_id not in self.user_states:
+                self.user_states[user_id] = {}
+            self.user_states[user_id]['stats_filters'] = filters
+            await self.show_journal_statistics(update, context, query)
+            return
+        elif data == "stats_filter_reset":
+            if user_id in self.user_states and 'stats_filters' in self.user_states[user_id]:
+                del self.user_states[user_id]['stats_filters']
+            await self.show_journal_statistics(update, context, query)
+            return
+        elif data == "stats_filter_soldier":
+            soldiers, _, _ = self.db.get_users_list(page=1, per_page=10000)
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton(s['full_name'], callback_data=f"stats_filter_soldier_{s['id']}")]
+                for s in soldiers
+            ]
+            keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_journal")])
+            await query.edit_message_text(
+                "Выберите бойца:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        elif data.startswith("stats_filter_soldier_"):
+            soldier_id = int(data.split("_")[3])
+            soldier = self.db.get_user(soldier_id)
+            filters = self.user_states.get(user_id, {}).get('stats_filters', {})
+            filters['soldier'] = soldier['full_name']
+            self.user_states[user_id]['stats_filters'] = filters
+            await self.show_journal_statistics(update, context, query)
+            return
+        elif data == "stats_filter_location":
+            locations = self.db.get_all_locations()
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton(loc, callback_data=f"stats_filter_location_{loc}")]
+                for loc in locations
+            ]
+            keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_journal")])
+            await query.edit_message_text(
+                "Выберите локацию:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        elif data.startswith("stats_filter_location_"):
+            location = data.split("_", 3)[3]
+            filters = self.user_states.get(user_id, {}).get('stats_filters', {})
+            filters['location'] = location
+            self.user_states[user_id]['stats_filters'] = filters
+            await self.show_journal_statistics(update, context, query)
+            return
         else:
             await query.edit_message_text(
                 "Функция в разработке или недоступна.",
@@ -1271,3 +1345,70 @@ class Handlers:
         data[group] = time_str
         with open(fname, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False)
+
+    async def show_journal_statistics(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
+        """Показать статистику журнала с фильтрами"""
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        user_id = update.effective_user.id
+        filters = self.user_states.get(user_id, {}).get('stats_filters', {})
+        keyboard = [
+            [InlineKeyboardButton("📅 Период", callback_data="stats_filter_period")],
+            [InlineKeyboardButton("👤 Боец", callback_data="stats_filter_soldier")],
+            [InlineKeyboardButton("📍 Локация", callback_data="stats_filter_location")],
+            [InlineKeyboardButton("🔄 Сбросить фильтры", callback_data="stats_filter_reset")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="admin_journal")]
+        ]
+        filter_text = self._get_stats_filter_text(filters)
+        # Определяем период
+        from datetime import datetime, timedelta
+        now = datetime.now()
+        period = filters.get('period', 'Месяц')
+        if period == 'Сегодня':
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = now
+        elif period == 'Вчера':
+            start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            end = start.replace(hour=23, minute=59, second=59, microsecond=999999)
+        elif period == 'Неделя':
+            start = now - timedelta(days=7)
+            end = now
+        elif period == 'Месяц':
+            start = now - timedelta(days=30)
+            end = now
+        else:
+            start = now - timedelta(days=30)
+            end = now
+        # Получаем записи с фильтрами
+        records = self.db.get_all_records_by_period(
+            start, end,
+            soldier=filters.get('soldier'),
+            location=filters.get('location')
+        )
+        # Считаем статистику
+        total_records = len(records)
+        action_stats = {}
+        location_stats = {}
+        for r in records:
+            action_stats[r['action']] = action_stats.get(r['action'], 0) + 1
+            location_stats[r['location']] = location_stats.get(r['location'], 0) + 1
+        text = f"📊 Статистика журнала за {period.lower()}\n\n"
+        text += f"📈 Всего записей: {total_records}\n"
+        text += "\n📊 По действиям:\n"
+        for action, count in action_stats.items():
+            emoji = "🚶" if action == "убыл" else "🏠"
+            text += f"{emoji} {action}: {count}\n"
+        text += "\n🏆 Топ локаций:\n"
+        for i, (location, count) in enumerate(sorted(location_stats.items(), key=lambda x: -x[1])[:5], 1):
+            text += f"{i}. {location}: {count}\n"
+        text += f"\n{filter_text}"
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+
+    def _get_stats_filter_text(self, filters):
+        text = "<b>Текущие фильтры:</b>\n"
+        period = filters.get('period', 'Месяц')
+        text += f"Период: {period}\n"
+        if filters.get('soldier'):
+            text += f"Боец: {filters['soldier']}\n"
+        if filters.get('location'):
+            text += f"Локация: {filters['location']}\n"
+        return text
