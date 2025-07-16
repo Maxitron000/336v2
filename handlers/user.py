@@ -160,6 +160,12 @@ async def process_name(message: Message, state: FSMContext):
 async def cmd_profile(message: Message):
     """Показать профиль пользователя"""
     try:
+        # Удаляем команду
+        try:
+            await message.delete()
+        except:
+            pass
+            
         user = await DBService.get_user(message.from_user.id)
         if not user:
             await message.answer("Вы не зарегистрированы. Используйте /start")
@@ -168,6 +174,15 @@ async def cmd_profile(message: Message):
         records = await DBService.get_user_records(message.from_user.id, 5)
         time = get_kaliningrad_time()
         date = get_kaliningrad_date()
+        
+        # Определяем текущий статус
+        current_status = "❓ Статус неизвестен"
+        if records:
+            last_record = records[0]
+            if last_record['action'] == 'прибыл':
+                current_status = f"🏠 **В ЧАСТИ** ({last_record['location']})"
+            else:
+                current_status = f"🚶 **НЕ В ЧАСТИ** ({last_record['location']})"
         
         profile_text = f"""
 👤 **ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ**
@@ -181,7 +196,10 @@ async def cmd_profile(message: Message):
 
 👤 **{user['full_name']}**
 🆔 ID: {user['id']}
-🛡️ Статус: {'Администратор' if user['is_admin'] else 'Пользователь'}
+🛡️ Права: {'🛡️ Администратор' if user['is_admin'] else '👤 Пользователь'}
+
+📍 **ТЕКУЩИЙ СТАТУС:**
+{current_status}
 
 📋 **ПОСЛЕДНИЕ ЗАПИСИ:**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -189,16 +207,33 @@ async def cmd_profile(message: Message):
         
         if records:
             for record in records:
-                action_emoji = "🟢" if record['action'] == 'прибыл' else "🔴"
+                action_emoji = "🏠" if record['action'] == 'прибыл' else "🚶"
+                time_formatted = format_kaliningrad_time(record['timestamp'])
                 profile_text += f"\n{action_emoji} **{record['action'].upper()}** - {record['location']}"
-                profile_text += f"\n   📅 {record['timestamp']}\n"
+                profile_text += f"\n   ⏰ {time_formatted}\n"
         else:
             profile_text += "\n📝 Записей пока нет"
         
-        await message.answer(profile_text, parse_mode="Markdown")
+        await message.answer(
+            profile_text, 
+            parse_mode="Markdown",
+            reply_markup=get_main_menu_keyboard(user.get('is_admin', False))
+        )
     except Exception as e:
         logging.error(f"Ошибка в cmd_profile: {e}")
         await message.answer("Произошла ошибка. Попробуйте позже.")
+
+def format_kaliningrad_time(dt_str):
+    """Форматирование времени в калининградский часовой пояс"""
+    try:
+        import pytz
+        from datetime import datetime
+        KALININGRAD_TZ = pytz.timezone('Europe/Kaliningrad')
+        dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+        kld_time = dt.astimezone(KALININGRAD_TZ)
+        return kld_time.strftime('%d.%m.%Y %H:%M')
+    except:
+        return dt_str
 
 @router.message(Command("help"))
 async def cmd_help(message: Message):

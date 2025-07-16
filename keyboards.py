@@ -184,178 +184,110 @@ def get_main_menu_keyboard(is_admin=False):
     """Главное меню"""
     keyboard = [
         [
-            InlineKeyboardButton(text="🟢 Прибыл", callback_data="action_arrive"),
-            InlineKeyboardButton(text="🔴 Убыл", callback_data="action_leave")
+            InlineKeyboardButton(text="🚶 Убыл", callback_data="action_leave"),
+            InlineKeyboardButton(text="🏠 Прибыл", callback_data="action_arrive")
         ],
         [
-            InlineKeyboardButton(text="📋 Мой журнал", callback_data="show_journal"),
-            InlineKeyboardButton(text="👤 Профиль", callback_data="show_profile")
+            InlineKeyboardButton(text="📋 Мой журнал", callback_data="show_journal")
         ]
     ]
-    
+
     if is_admin:
         keyboard.append([
             InlineKeyboardButton(text="🛡️ Админ-панель", callback_data="admin_panel")
         ])
-    
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-def get_location_keyboard(action):
-    """Клавиатура выбора локации"""
-    keyboard = []
-    
-    # Добавляем локации по 2 в ряд
-    for i in range(0, len(LOCATIONS), 2):
-        row = []
-        for j in range(2):
-            if i + j < len(LOCATIONS):
-                location = LOCATIONS[i + j]
-                row.append(InlineKeyboardButton(
-                    text=location,
-                    callback_data=f"location_{action}_{location}"
-                ))
-        keyboard.append(row)
-    
-    # Кнопка назад
-    keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")])
-    
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-def get_admin_panel_keyboard(is_main_admin=False):
-    """Админ-панель"""
-    keyboard = [
-        [
-            InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats"),
-            InlineKeyboardButton(text="📋 Все записи", callback_data="admin_records")
-        ],
-        [
-            InlineKeyboardButton(text="📤 Экспорт Excel", callback_data="admin_export")
-        ]
-    ]
-    
-    if is_main_admin:
-        keyboard.append([
-            InlineKeyboardButton(text="👥 Управление админами", callback_data="admin_manage")
-        ])
-    
-    keyboard.append([InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")])
-    
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_admin_main_keyboard(is_main_admin=False):
     """Главная админ-панель"""
     keyboard = [
         [
-            InlineKeyboardButton(text="📊 Быстрая сводка", callback_data="admin_summary"),
-            InlineKeyboardButton(text="👥 Личный состав", callback_data="admin_personnel")
+            InlineKeyboardButton(text="📊 Быстрая сводка", callback_data="admin_summary")
         ],
         [
-            InlineKeyboardButton(text="📖 Журнал событий", callback_data="admin_journal"),
-            InlineKeyboardButton(text="📤 Экспорт Excel", callback_data="journal_export")
-        ],
-        [
-            InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats")
+            InlineKeyboardButton(text="👥 Личный состав", callback_data="admin_personnel"),
+            InlineKeyboardButton(text="📖 Журнал", callback_data="admin_journal")
         ]
     ]
-    
+
     if is_main_admin:
         keyboard.append([
             InlineKeyboardButton(text="👑 Управление админами", callback_data="admin_manage"),
             InlineKeyboardButton(text="⚙️ Настройки", callback_data="admin_settings")
         ])
         keyboard.append([
-            InlineKeyboardButton(text="⚠️ Опасная зона", callback_data="danger_zone")
+            InlineKeyboardButton(text="🗑️ Опасная зона", callback_data="admin_danger")
         ])
-    
-    keyboard.append([InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")])
-    
+
+    keyboard.append([
+        InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")
+    ])
+
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_personnel_keyboard():
-    """Управление личным составом"""
+    """Меню управления личным составом"""
     keyboard = [
         [
-            InlineKeyboardButton(text="📋 Список л/с", callback_data="personnel_list"),
+            InlineKeyboardButton(text="👥 Список л/с", callback_data="personnel_list"),
             InlineKeyboardButton(text="📊 Статус всех", callback_data="personnel_status")
         ],
         [
-            InlineKeyboardButton(text="➕ Добавить бойца", callback_data="personnel_add"),
-            InlineKeyboardButton(text="❌ Удалить бойца", callback_data="personnel_delete")
+            InlineKeyboardButton(text="🗑️ Удалить бойца", callback_data="personnel_delete")
+        ],
+        [
+            InlineKeyboardButton(text="🔙 Назад", callback_data="admin_panel")
         ]
     ]
-    
-    keyboard.append([InlineKeyboardButton(text="🔙 Админ-панель", callback_data="admin_panel")])
-    
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_status_keyboard():
-    """Клавиатура выбора статуса"""
+    """Меню статуса личного состава"""
     keyboard = [
         [
-            InlineKeyboardButton(text="👥 Все", callback_data="status_all"),
-            InlineKeyboardButton(text="🏠 На месте", callback_data="status_present")
+            InlineKeyboardButton(text="📊 Все", callback_data="status_all")
         ],
         [
+            InlineKeyboardButton(text="🏠 На месте", callback_data="status_present"),
             InlineKeyboardButton(text="🚶 Убыли", callback_data="status_absent")
-        ]
-    ]
-    
-    keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="admin_personnel")])
-    
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-def get_journal_keyboard():
-    """Журнал событий"""
-    keyboard = [
-        [
-            InlineKeyboardButton(text="📋 Просмотр", callback_data="journal_view"),
-            InlineKeyboardButton(text="📤 Экспорт", callback_data="journal_export")
         ],
         [
-            InlineKeyboardButton(text="📊 Статистика", callback_data="journal_stats"),
-            InlineKeyboardButton(text="🗑️ Очистить", callback_data="journal_clear")
+            InlineKeyboardButton(text="🔙 Назад", callback_data="personnel_status")
         ]
     ]
-    
-    keyboard.append([InlineKeyboardButton(text="🔙 Админ-панель", callback_data="admin_panel")])
-    
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_admin_manage_keyboard():
-    """Управление администраторами"""
+    """Меню управления администраторами"""
     keyboard = [
         [
-            InlineKeyboardButton(text="➕ Добавить админа", callback_data="add_admin"),
-            InlineKeyboardButton(text="➖ Удалить админа", callback_data="remove_admin")
+            InlineKeyboardButton(text="➕ Добавить админа", callback_data="add_admin")
         ],
         [
-            InlineKeyboardButton(text="📋 Список админов", callback_data="list_admins"),
-            InlineKeyboardButton(text="⚙️ Права доступа", callback_data="admin_permissions")
+            InlineKeyboardButton(text="🔙 Назад", callback_data="admin_panel")
         ]
     ]
-    
-    keyboard.append([InlineKeyboardButton(text="🔙 Админ-панель", callback_data="admin_panel")])
-    
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-def get_danger_zone_keyboard():
-    """Опасная зона"""
+def get_journal_keyboard():
+    """Меню журнала"""
     keyboard = [
         [
-            InlineKeyboardButton(text="🚨 Отметить всех прибывшими", callback_data="danger_mark_all")
+            InlineKeyboardButton(text="📖 Просмотр", callback_data="journal_view"),
+            InlineKeyboardButton(text="📤 Экспорт", callback_data="journal_export")
         ],
         [
-            InlineKeyboardButton(text="🗑️ Очистить журнал", callback_data="danger_clear_journal"),
-            InlineKeyboardButton(text="💥 Сброс системы", callback_data="danger_reset_all")
+            InlineKeyboardButton(text="🔙 Назад", callback_data="admin_panel")
         ]
     ]
-    
-    keyboard.append([InlineKeyboardButton(text="🔙 Админ-панель", callback_data="admin_panel")])
-    
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_back_keyboard(callback_data="main_menu"):
     """Кнопка назад"""
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 Назад", callback_data=callback_data)]
-    ])
+    keyboard = [
+        [
+            InlineKeyboardButton(text="🔙 Назад", callback_data=callback_data)
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)

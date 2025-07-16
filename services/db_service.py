@@ -43,13 +43,18 @@ class DBService:
                 async with db.execute("SELECT COUNT(*) FROM records") as cursor:
                     records_count = (await cursor.fetchone())[0]
 
+                # Записи за сегодня
+                async with db.execute("SELECT COUNT(*) FROM records WHERE DATE(timestamp) = DATE('now')") as cursor:
+                    today_records = (await cursor.fetchone())[0]
+
                 return {
                     'users': users_count,
-                    'records': records_count
+                    'records': records_count,
+                    'today_records': today_records
                 }
         except Exception as e:
             logging.error(f"Ошибка получения статистики: {e}")
-            return {'users': 0, 'records': 0}
+            return {'users': 0, 'records': 0, 'today_records': 0}
 
     @staticmethod
     async def add_record(user_id: int, action: str, location: str, comment: str = None):
@@ -207,3 +212,61 @@ class DBService:
         except Exception as e:
             logging.error(f"Ошибка получения записей по дате: {e}")
             return []
+
+    @staticmethod
+    async def get_all_admins():
+        """Получить всех администраторов"""
+        try:
+            async with aiosqlite.connect(DB_NAME) as db:
+                async with db.execute("""
+                    SELECT id, username, full_name, is_admin, created_at
+                    FROM users
+                    WHERE is_admin = 1
+                    ORDER BY full_name
+                """) as cursor:
+                    rows = await cursor.fetchall()
+
+                admins = []
+                for row in rows:
+                    admins.append({
+                        'id': row[0],
+                        'username': row[1],
+                        'full_name': row[2],
+                        'is_admin': bool(row[3]),
+                        'created_at': row[4]
+                    })
+
+                return admins
+        except Exception as e:
+            logging.error(f"Ошибка получения администраторов: {e}")
+            return []
+
+    @staticmethod
+    async def delete_user(user_id):
+        """Удалить пользователя и все его записи"""
+        try:
+            async with aiosqlite.connect(DB_NAME) as db:
+                # Удаляем все записи пользователя
+                await db.execute("DELETE FROM records WHERE user_id = ?", (user_id,))
+                # Удаляем пользователя
+                await db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+                await db.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Ошибка удаления пользователя: {e}")
+            return False
+
+    @staticmethod
+    async def set_admin_status(user_id, is_admin):
+        """Установить статус администратора"""
+        try:
+            async with aiosqlite.connect(DB_NAME) as db:
+                await db.execute(
+                    "UPDATE users SET is_admin = ? WHERE id = ?",
+                    (is_admin, user_id)
+                )
+                await db.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Ошибка установки статуса админа: {e}")
+            return False
