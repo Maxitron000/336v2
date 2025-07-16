@@ -177,3 +177,73 @@ def get_general_settings_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_settings")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from config import LOCATIONS
+
+def get_main_menu_keyboard(is_admin=False):
+    """Главное меню"""
+    keyboard = [
+        [
+            InlineKeyboardButton(text="🟢 Прибыл", callback_data="action_arrive"),
+            InlineKeyboardButton(text="🔴 Убыл", callback_data="action_leave")
+        ],
+        [
+            InlineKeyboardButton(text="📋 Мой журнал", callback_data="show_journal"),
+            InlineKeyboardButton(text="👤 Профиль", callback_data="show_profile")
+        ]
+    ]
+    
+    if is_admin:
+        keyboard.append([
+            InlineKeyboardButton(text="🛡️ Админ-панель", callback_data="admin_panel")
+        ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+def get_location_keyboard(action):
+    """Клавиатура выбора локации"""
+    keyboard = []
+    
+    # Добавляем локации по 2 в ряд
+    for i in range(0, len(LOCATIONS), 2):
+        row = []
+        for j in range(2):
+            if i + j < len(LOCATIONS):
+                location = LOCATIONS[i + j]
+                row.append(InlineKeyboardButton(
+                    text=location,
+                    callback_data=f"location_{action}_{location}"
+                ))
+        keyboard.append(row)
+    
+    # Кнопка назад
+    keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+def get_admin_panel_keyboard(is_main_admin=False):
+    """Админ-панель"""
+    keyboard = [
+        [
+            InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats"),
+            InlineKeyboardButton(text="📋 Все записи", callback_data="admin_records")
+        ],
+        [
+            InlineKeyboardButton(text="📤 Экспорт Excel", callback_data="admin_export")
+        ]
+    ]
+    
+    if is_main_admin:
+        keyboard.append([
+            InlineKeyboardButton(text="👥 Управление админами", callback_data="admin_manage")
+        ])
+    
+    keyboard.append([InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+def get_back_keyboard():
+    """Кнопка назад"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")]
+    ])
