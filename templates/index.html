@@ -1,0 +1,296 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>336 ОБРМП - Система военного табеля</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            animation: fadeInDown 1s ease-in-out;
+        }
+
+        .logo {
+            font-size: 3rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            margin-bottom: 30px;
+        }
+
+        .time-container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            animation: fadeInUp 1s ease-in-out;
+        }
+
+        .time-display {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .current-time {
+            font-size: 4rem;
+            font-weight: bold;
+            color: #FFD700;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            font-family: 'Courier New', monospace;
+        }
+
+        .current-date {
+            font-size: 1.5rem;
+            margin-top: 10px;
+            opacity: 0.9;
+        }
+
+        .location-info {
+            text-align: center;
+            font-size: 1.1rem;
+            opacity: 0.8;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-icon {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #FFD700;
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        .military-badge {
+            display: inline-block;
+            background: linear-gradient(45deg, #FFD700, #FFA500);
+            color: #1e3c72;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-weight: bold;
+            margin: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background: #00FF00;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            opacity: 0.7;
+            font-size: 0.9rem;
+        }
+
+        .telegram-info {
+            background: rgba(0, 136, 204, 0.2);
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .telegram-link {
+            color: #FFD700;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .telegram-link:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .current-time {
+                font-size: 2.5rem;
+            }
+            
+            .logo {
+                font-size: 2rem;
+            }
+            
+            .time-container {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🏛️ 336 ОБРМП</div>
+            <div class="subtitle">Система военного табеля</div>
+            <div class="military-badge">⚓ Отдельная бригада морской пехоты</div>
+        </div>
+
+        <div class="time-container">
+            <div class="time-display">
+                <div class="current-time" id="current-time">00:00:00</div>
+                <div class="current-date" id="current-date">01.01.2024</div>
+            </div>
+            <div class="location-info">
+                <span class="status-indicator"></span>
+                🌍 Калининград, Россия
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">👥</div>
+                <div class="stat-number" id="total-users">0</div>
+                <div class="stat-label">Всего пользователей</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">📝</div>
+                <div class="stat-number" id="today-records">0</div>
+                <div class="stat-label">Записей сегодня</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">🟢</div>
+                <div class="stat-number" id="online-users">0</div>
+                <div class="stat-label">Онлайн</div>
+            </div>
+        </div>
+
+        <div class="telegram-info">
+            <p>📱 Для работы с системой используйте Telegram бот:</p>
+            <a href="https://t.me/Tabel336bot" class="telegram-link">@Tabel336bot</a>
+        </div>
+
+        <div class="footer">
+            <p>🔐 Система готова к работе • Время обновляется в реальном времени</p>
+        </div>
+    </div>
+
+    <script>
+        // Обновление времени
+        function updateTime() {
+            fetch('/api/time')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('current-time').textContent = data.time;
+                    document.getElementById('current-date').textContent = data.date;
+                })
+                .catch(error => console.error('Ошибка при получении времени:', error));
+        }
+
+        // Обновление статистики
+        function updateStats() {
+            fetch('/api/stats')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('total-users').textContent = data.total_users || 0;
+                    document.getElementById('today-records').textContent = data.today_records || 0;
+                    document.getElementById('online-users').textContent = data.online_users || 0;
+                })
+                .catch(error => console.error('Ошибка при получении статистики:', error));
+        }
+
+        // Инициализация
+        updateTime();
+        updateStats();
+
+        // Обновление времени каждую секунду
+        setInterval(updateTime, 1000);
+        
+        // Обновление статистики каждые 30 секунд
+        setInterval(updateStats, 30000);
+    </script>
+</body>
+</html>
