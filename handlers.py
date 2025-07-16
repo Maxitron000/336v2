@@ -279,7 +279,8 @@ class Handlers:
             await self.show_main_menu(update, context, is_admin, query)
         else:
             await update.message.reply_text(
-                "Ошибка при добавлении записи. Попробуйте еще раз."
+                "Ошибка при добавлении записи. Попробуйте еще раз.",
+                reply_markup=get_back_keyboard()
             )
     
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -721,6 +722,20 @@ class Handlers:
                 del self.user_states[user_id]['personnel_filters']
             await self.show_personnel_management(update, context, query)
             return
+        elif data == "journal_page_prev":
+            page = self.user_states.get(user_id, {}).get('journal_page', 1)
+            self.user_states[user_id]['journal_page'] = max(1, page - 1)
+            await self.show_journal_records(update, context, query)
+            return
+        elif data == "journal_page_next":
+            page = self.user_states.get(user_id, {}).get('journal_page', 1)
+            self.user_states[user_id]['journal_page'] = page + 1
+            await self.show_journal_records(update, context, query)
+            return
+        elif data.startswith("journal_period_") or data.startswith("journal_filter_soldier_") or data.startswith("journal_filter_location_") or data.startswith("journal_filter_action_") or data == "journal_filter_reset":
+            if user_id not in self.user_states:
+                self.user_states[user_id] = {}
+            self.user_states[user_id]['journal_page'] = 1
         else:
             await query.edit_message_text(
                 "Функция в разработке или недоступна.",
@@ -1672,3 +1687,63 @@ class Handlers:
         if filters.get('location'):
             text += f"Локация: {filters['location']}\n"
         return text
+
+    async def show_journal_records(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
+        """Показать записи журнала с учётом фильтров и пагинации"""
+        user_id = update.effective_user.id
+        filters = self.user_states.get(user_id, {}).get('journal_filters', {})
+        page = self.user_states.get(user_id, {}).get('journal_page', 1)
+        PAGE_SIZE = 10
+        # Определяем период
+        from datetime import datetime, timedelta
+        now = datetime.now()
+        period = filters.get('period', 'Месяц')
+        if period == 'Сегодня':
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = now
+        elif period == 'Вчера':
+            start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            end = start.replace(hour=23, minute=59, second=59, microsecond=999999)
+        elif period == 'Неделя':
+            start = now - timedelta(days=7)
+            end = now
+        elif period == 'Месяц':
+            start = now - timedelta(days=30)
+            end = now
+        else:
+            start = now - timedelta(days=30)
+            end = now
+        # Получаем записи за период и с фильтрами
+        records = self.db.get_all_records_by_period(
+            start, end,
+            soldier=filters.get('soldier'),
+            location=filters.get('location'),
+            action=filters.get('action')
+        )
+        total_pages = max(1, (len(records) + PAGE_SIZE - 1) // PAGE_SIZE)
+        page = max(1, min(page, total_pages))
+        start_idx = (page - 1) * PAGE_SIZE
+        end_idx = start_idx + PAGE_SIZE
+        page_records = records[start_idx:end_idx]
+        if not page_records:
+            text = "📋 Записей в журнале за выбранный период не найдено."
+        else:
+            text = f"📋 Записи журнала за {period.lower()} (стр. {page}/{total_pages})\n\n"
+            for record in page_records:
+                timestamp = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
+                formatted_time = timestamp.strftime('%d.%m.%Y %H:%M')
+                action_emoji = "🚶" if record['action'] == "убыл" else "🏠"
+                text += f"👤 {record['full_name']}\n"
+                text += f"{action_emoji} {record['action']} - {record['location']}\n"
+                text += f"⏰ {formatted_time}\n\n"
+            if len(records) > end_idx:
+                text += f"... и еще {len(records) - end_idx} записей"
+        # Кнопки пагинации
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        buttons = []
+        if page > 1:
+            buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data="journal_page_prev"))
+        if page < total_pages:
+            buttons.append(InlineKeyboardButton("Вперёд ➡️", callback_data="journal_page_next"))
+        buttons.append(InlineKeyboardButton("🔙 Назад", callback_data="admin_journal"))
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup([buttons]))
