@@ -736,6 +736,20 @@ class Handlers:
             if user_id not in self.user_states:
                 self.user_states[user_id] = {}
             self.user_states[user_id]['journal_page'] = 1
+        elif data == "personnel_page_prev":
+            page = self.user_states.get(user_id, {}).get('personnel_page', 1)
+            self.user_states[user_id]['personnel_page'] = max(1, page - 1)
+            await self.show_personnel_management(update, context, query)
+            return
+        elif data == "personnel_page_next":
+            page = self.user_states.get(user_id, {}).get('personnel_page', 1)
+            self.user_states[user_id]['personnel_page'] = page + 1
+            await self.show_personnel_management(update, context, query)
+            return
+        elif data.startswith("personnel_status_") or data.startswith("personnel_location_") or data == "personnel_filter_reset" or data == "personnel_filter_name":
+            if user_id not in self.user_states:
+                self.user_states[user_id] = {}
+            self.user_states[user_id]['personnel_page'] = 1
         else:
             await query.edit_message_text(
                 "Функция в разработке или недоступна.",
@@ -900,10 +914,12 @@ class Handlers:
         await query.edit_message_text(text, reply_markup=get_back_keyboard("admin_panel"))
     
     async def show_personnel_management(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
-        """Показать управление личным составом с фильтрами"""
+        """Показать управление личным составом с фильтрами и пагинацией"""
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         user_id = update.effective_user.id
         filters = self.user_states.get(user_id, {}).get('personnel_filters', {})
+        page = self.user_states.get(user_id, {}).get('personnel_page', 1)
+        PAGE_SIZE = 10
         keyboard = [
             [InlineKeyboardButton("Статус", callback_data="personnel_filter_status")],
             [InlineKeyboardButton("ФИО", callback_data="personnel_filter_name")],
@@ -923,12 +939,25 @@ class Handlers:
             if filters.get('location') and (not s['last_location'] or filters['location'].lower() not in s['last_location'].lower()):
                 continue
             filtered.append(s)
+        total_pages = max(1, (len(filtered) + PAGE_SIZE - 1) // PAGE_SIZE)
+        page = max(1, min(page, total_pages))
+        start_idx = (page - 1) * PAGE_SIZE
+        end_idx = start_idx + PAGE_SIZE
+        page_soldiers = filtered[start_idx:end_idx]
         text = f"👥 Управление личным составом\n\n{filter_text}\n"
-        if not filtered:
+        if not page_soldiers:
             text += "Нет бойцов по выбранным фильтрам."
         else:
-            text += "\n".join([f"{s['full_name']} — {s['status']} — {s['last_location'] or '-'}" for s in filtered])
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+            text += f"Страница {page}/{total_pages}\n\n"
+            text += "\n".join([f"{s['full_name']} — {s['status']} — {s['last_location'] or '-'}" for s in page_soldiers])
+        # Кнопки пагинации
+        buttons = []
+        if page > 1:
+            buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data="personnel_page_prev"))
+        if page < total_pages:
+            buttons.append(InlineKeyboardButton("Вперёд ➡️", callback_data="personnel_page_next"))
+        buttons.append(InlineKeyboardButton("🔙 Назад", callback_data="admin_panel"))
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup([buttons, *keyboard]))
 
     def _get_personnel_filter_text(self, filters):
         text = "<b>Текущие фильтры:</b>\n"
@@ -1254,6 +1283,34 @@ class Handlers:
                 del self.user_states[user_id]['personnel_filters']
             await self.show_personnel_management(update, context, query)
             return
+        elif data == "journal_page_prev":
+            page = self.user_states.get(user_id, {}).get('journal_page', 1)
+            self.user_states[user_id]['journal_page'] = max(1, page - 1)
+            await self.show_journal_records(update, context, query)
+            return
+        elif data == "journal_page_next":
+            page = self.user_states.get(user_id, {}).get('journal_page', 1)
+            self.user_states[user_id]['journal_page'] = page + 1
+            await self.show_journal_records(update, context, query)
+            return
+        elif data.startswith("journal_period_") or data.startswith("journal_filter_soldier_") or data.startswith("journal_filter_location_") or data.startswith("journal_filter_action_") or data == "journal_filter_reset":
+            if user_id not in self.user_states:
+                self.user_states[user_id] = {}
+            self.user_states[user_id]['journal_page'] = 1
+        elif data == "personnel_page_prev":
+            page = self.user_states.get(user_id, {}).get('personnel_page', 1)
+            self.user_states[user_id]['personnel_page'] = max(1, page - 1)
+            await self.show_personnel_management(update, context, query)
+            return
+        elif data == "personnel_page_next":
+            page = self.user_states.get(user_id, {}).get('personnel_page', 1)
+            self.user_states[user_id]['personnel_page'] = page + 1
+            await self.show_personnel_management(update, context, query)
+            return
+        elif data.startswith("personnel_status_") or data.startswith("personnel_location_") or data == "personnel_filter_reset" or data == "personnel_filter_name":
+            if user_id not in self.user_states:
+                self.user_states[user_id] = {}
+            self.user_states[user_id]['personnel_page'] = 1
         else:
             await query.edit_message_text(
                 "Функция в разработке или недоступна.",
