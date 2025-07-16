@@ -84,6 +84,21 @@ class Handlers:
             await self.handle_custom_location(update, context)
         elif state == 'waiting_for_admin_id':
             await self.handle_admin_id_input(update, context)
+        elif state == 'waiting_for_new_name':
+            # Смена ФИО бойца
+            soldier_id = self.user_states[user_id]['soldier_id']
+            new_name = update.message.text.strip()
+            if not re.match(r'^[А-ЯЁ][а-яё]+ [А-ЯЁ]\.[А-ЯЁ]\.$', new_name):
+                await update.message.reply_text(
+                    "Неверный формат ФИО!\n\nПравильный формат: Фамилия И.О.\nПример: Иванов И.И.\n\nПопробуйте еще раз:")
+                return
+            if self.db.update_user_full_name(soldier_id, new_name):
+                await update.message.reply_text(f"✅ ФИО бойца успешно изменено на: {new_name}")
+            else:
+                await update.message.reply_text("❌ Ошибка при изменении ФИО. Попробуйте еще раз.")
+            del self.user_states[user_id]
+            is_admin = self.db.is_admin(user_id)
+            await self.show_main_menu(update, context, is_admin)
         else:
             await update.message.reply_text("Используйте кнопки меню для навигации.")
     
@@ -226,6 +241,14 @@ class Handlers:
         
         elif data == "cancel":
             await self.show_main_menu(update, context, is_admin, query)
+        elif data.startswith("editname_"):
+            soldier_id = int(data.split("_")[1])
+            self.user_states[user_id] = {"state": "waiting_for_new_name", "soldier_id": soldier_id}
+            await query.edit_message_text(
+                "Введите новое ФИО для бойца в формате: Фамилия И.О.\n\nПример: Иванов И.И.",
+                reply_markup=get_back_keyboard("admin_personnel")
+            )
+            return
     
     async def show_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
                            is_admin: bool, query=None):
@@ -490,10 +513,23 @@ class Handlers:
     
     async def edit_soldier_name(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
         """Редактирование ФИО бойца"""
-        text = "✏️ Смена ФИО бойца\n\n🔧 Функция в разработке"
-        
-        await query.edit_message_text(text, reply_markup=get_back_keyboard("admin_personnel"))
-    
+        # Получаем всех бойцов по алфавиту
+        soldiers, _, _ = self.db.get_users_list(page=1, per_page=10000)
+        if not soldiers:
+            await query.edit_message_text("Нет бойцов для редактирования.", reply_markup=get_back_keyboard("admin_personnel"))
+            return
+        # Формируем клавиатуру выбора бойца
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        keyboard = [
+            [InlineKeyboardButton(f"{s['full_name']}", callback_data=f"editname_{s['id']}")]
+            for s in soldiers
+        ]
+        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_personnel")])
+        await query.edit_message_text(
+            "✏️ Выберите бойца для смены ФИО:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
     async def add_new_soldier(self, update: Update, context: ContextTypes.DEFAULT_TYPE, query):
         """Добавление нового бойца"""
         text = "➕ Добавление нового бойца\n\n🔧 Функция в разработке"

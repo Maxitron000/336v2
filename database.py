@@ -560,3 +560,16 @@ class Database:
         except Exception as e:
             print(f"Ошибка сохранения настроек пользователя: {e}")
             return False
+
+    def update_user_full_name(self, user_id: int, new_full_name: str) -> bool:
+        """Обновить ФИО пользователя по user_id"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            cursor.execute('UPDATE users SET full_name = ? WHERE id = ?', (new_full_name, user_id))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Ошибка обновления ФИО пользователя: {e}")
+            return False
