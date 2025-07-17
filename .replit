@@ -30,6 +30,19 @@ mode = "sequential"
 task = "shell.exec"
 args = "python web_interface.py"
 
+[[workflows.workflow]]
+name = "Run Both"
+author = 44716284
+mode = "parallel"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python web_interface.py"
+
 [[ports]]
 localPort = 5000
 externalPort = 80
