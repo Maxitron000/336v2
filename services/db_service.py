@@ -159,8 +159,8 @@ class DatabaseService:
             # Проверяем последнее действие пользователя (защита от дублирования)
             last_records = self.get_user_records(user_id, 1)
             if last_records:
-                # Получаем последнюю запись (самую новую)
-                last_record = last_records[-1]  # Последняя запись в списке
+                # Получаем последнюю запись (самую новую) - первая в списке, так как ORDER BY timestamp DESC
+                last_record = last_records[0]  # Первая запись в списке (самая новая)
                 last_action = last_record['action']
                 if last_action == action:
                     logging.warning(f"Попытка дублирования действия '{action}' пользователем {user_id}")

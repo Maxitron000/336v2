@@ -366,7 +366,9 @@ async def callback_action_selection(callback: CallbackQuery, state: FSMContext):
             action = "в части"
             location = "Часть"
 
-            if db.add_record(user_id, action, location):
+            # Добавляем запись
+            result = db.add_record(user_id, action, location)
+            if result:
                 # Отправляем сообщение о статусе
                 await callback.message.answer(
                     f"✅ Статус обновлен!\n"
@@ -389,6 +391,14 @@ async def callback_action_selection(callback: CallbackQuery, state: FSMContext):
                     await callback.message.delete()
                 except:
                     pass
+            else:
+                # Показываем ошибку с возможностью вернуться
+                keyboard = [[InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")]]
+                await callback.message.edit_text(
+                    "❌ Не удалось обновить статус.\n"
+                    "Возможно, вы уже отмечены как присутствующий.",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+                )
         else:
             # Проверяем последнее действие для "убыл"
             last_records = db.get_user_records(user_id, 1)
