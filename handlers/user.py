@@ -281,6 +281,30 @@ async def handle_custom_location(message: Message, state: FSMContext):
         await state.clear()
         await message.answer("❌ Произошла ошибка. Попробуйте начать заново.")
 
+@router.callback_query(F.data == "change_location")
+async def callback_change_location(callback: CallbackQuery, state: FSMContext):
+    """Сменить локацию без повторной отметки"""
+    user_id = callback.from_user.id
+    
+    # Проверяем, зарегистрирован ли пользователь
+    if not db.get_user(user_id):
+        await callback.message.edit_text(
+            "❌ Вы не зарегистрированы в системе!\n"
+            "Отправьте команду /start для регистрации."
+        )
+        await callback.answer()
+        return
+
+    # Очищаем состояние
+    await state.clear()
+    
+    # Показываем выбор локаций для смены
+    await callback.message.edit_text(
+        "🔄 Выберите новую локацию:",
+        reply_markup=get_location_keyboard("убыл")
+    )
+    await callback.answer()
+
 @router.callback_query(F.data == "main_menu")
 async def callback_main_menu(callback: CallbackQuery, state: FSMContext):
     """Показать главное меню"""
@@ -330,11 +354,12 @@ async def callback_action_selection(callback: CallbackQuery, state: FSMContext):
                     f"⏰ Время отметки: {last_time}\n\n"
                     "💡 **Что делать дальше:**\n"
                     "1️⃣ Если хотите уйти — нажмите «❌ Убыл»\n"
-                    "2️⃣ Если ошиблись — просто вернитесь в меню",
+                    "2️⃣ Если ошиблись — просто вернитесь в меню\n\n"
+                    "ℹ️ **Подсказка:** Повторное нажатие \"Прибыл\" не изменит ваш статус",
                     reply_markup=reply_markup,
                     parse_mode="Markdown"
                 )
-                await callback.answer()
+                await callback.answer("⚠️ Вы уже в части!", show_alert=True)
                 return
 
             # Для "Прибыл" сразу добавляем запись "в части"
@@ -372,6 +397,7 @@ async def callback_action_selection(callback: CallbackQuery, state: FSMContext):
                 last_time = datetime.fromisoformat(last_records[0]['timestamp'].replace('Z', '+00:00')).strftime('%d.%m.%Y в %H:%M')
 
                 keyboard = [
+                    [InlineKeyboardButton(text="🔄 Сменить локацию", callback_data="change_location")],
                     [InlineKeyboardButton(text="🔙 Понятно, вернуться в меню", callback_data="main_menu")]
                 ]
                 reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -383,12 +409,13 @@ async def callback_action_selection(callback: CallbackQuery, state: FSMContext):
                     f"⏰ Время отметки: {last_time}\n\n"
                     "💡 **Что делать дальше:**\n"
                     "1️⃣ Если вернулись — нажмите «✅ Прибыл»\n"
-                    "2️⃣ Если хотите сменить локацию — сначала прибудьте, затем убудьте заново\n"
-                    "3️⃣ Если ошиблись — просто вернитесь в меню",
+                    "2️⃣ Если хотите сменить локацию — используйте кнопку выше\n"
+                    "3️⃣ Если ошиблись — просто вернитесь в меню\n\n"
+                    "ℹ️ **Подсказка:** Повторное нажатие \"Убыл\" не изменит ваш статус",
                     reply_markup=reply_markup,
                     parse_mode="Markdown"
                 )
-                await callback.answer()
+                await callback.answer("⚠️ Вы уже отмечены как отсутствующий!", show_alert=True)
                 return
 
             # Для "Убыл" показываем выбор локаций
