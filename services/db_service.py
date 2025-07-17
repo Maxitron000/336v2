@@ -115,7 +115,7 @@ class DatabaseService:
                 logging.error(f"Некорректный user_id: {user_id}")
                 return False
 
-            if not action or action.strip() not in ['в части', 'не в части', 'прибыл', 'убыл']:
+            if not action or action.strip() not in ['прибыл', 'убыл']:
                 logging.error(f"Некорректное действие: {action}")
                 return False
 
@@ -326,8 +326,8 @@ class DatabaseService:
                     ''', (user['id'],))
                     last_record = last_record_cursor.fetchone()
 
-                    # Проверяем статус: "не в части" или "убыл" = отсутствует
-                    if last_record and last_record['action'] in ['не в части', 'убыл']:
+                    # Проверяем статус: "убыл" = отсутствует, "прибыл" = присутствует
+                    if last_record and last_record['action'] == 'убыл':
                         absent_list.append({
                             'name': user['full_name'],
                             'location': last_record['location']
@@ -424,6 +424,12 @@ class DatabaseService:
             # Форматируем данные - новые записи идут снизу (хронологический порядок)
             df['timestamp'] = pd.to_datetime(df['timestamp'])
             df = df.sort_values('timestamp', ascending=True)
+
+            # Преобразуем действия для корректного отображения
+            df['action'] = df['action'].replace({
+                'в части': 'прибыл',
+                'не в части': 'убыл'
+            })
 
             # Переименовываем колонки
             df = df.rename(columns={
