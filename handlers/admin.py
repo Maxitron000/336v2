@@ -1535,7 +1535,12 @@ async def callback_settings_action(callback: CallbackQuery):
         elif action == "info" and "system" in callback.data:
             # Системная информация
             import platform
-            import psutil
+            try:
+                import psutil
+                psutil_available = True
+            except ImportError:
+                psutil_available = False
+
             import os
 
             text = f"⚙️ **Системная информация**\n\n"
@@ -1544,10 +1549,16 @@ async def callback_settings_action(callback: CallbackQuery):
             text += f"• Python: {platform.python_version()}\n"
             text += f"• Архитектура: {platform.machine()}\n\n"
 
-            text += f"💾 **Ресурсы:**\n"
-            text += f"• ОЗУ: {psutil.virtual_memory().percent}% использовано\n"
-            text += f"• CPU: {psutil.cpu_percent()}%\n"
-            text += f"• Диск: {psutil.disk_usage('/').percent}%\n\n"
+            if psutil_available:
+                try:
+                    text += f"💾 **Ресурсы:**\n"
+                    text += f"• ОЗУ: {psutil.virtual_memory().percent:.1f}% использовано\n"
+                    text += f"• CPU: {psutil.cpu_percent():.1f}%\n"
+                    text += f"• Диск: {psutil.disk_usage('/').percent:.1f}%\n\n"
+                except Exception:
+                    text += f"💾 **Ресурсы:** Недоступно\n\n"
+            else:
+                text += f"💾 **Ресурсы:** Библиотека psutil недоступна\n\n"
 
             text += f"📁 **Проект:**\n"
             text += f"• Рабочая папка: {os.getcwd()}\n"
