@@ -1,3 +1,4 @@
+python
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
@@ -100,109 +101,168 @@ async def callback_admin_journal(callback: CallbackQuery):
         await callback.answer("❌ У вас нет прав администратора", show_alert=True)
         return
 
-    await show_admin_journal_page(callback, 1)
+    #await show_admin_journal_page(callback, 1)
+    #await callback.answer()
+    await show_admin_journal(callback)
     await callback.answer()
 
-async def show_admin_journal_page(callback: CallbackQuery, page: int, days: int = 7):
-    """Показать страницу админского журнала"""
+async def show_admin_journal(callback: CallbackQuery):
+    """Показать записи журнала для админа"""
+    user_id = callback.from_user.id
+
+    if not db.is_admin(user_id):
+        await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
+        return
+
     try:
-        per_page = 8
-        
-        # Получаем записи с пагинацией
-        result = db.get_records_paginated(page=page, per_page=per_page, days=days)
-        
-        if not result['records']:
-            text = f"📋 Записей за последние {days} дней не найдено."
-            keyboard = get_back_keyboard("admin_panel")
+        # Получаем последние 10 записей за неделю
+        records = db.get_all_records(days=7, limit=10)
+
+        if not records:
+            text = "📋 **Журнал записей**\n\n📝 Записей за последние 7 дней не найдено."
         else:
-            text = f"📋 Журнал событий за {days} дней (стр. {page}/{result['total_pages']}):\n\n"
-            
-            for i, record in enumerate(result['records'], 1):
+            text = "📋 **Журнал записей**\n"
+            text += "─" * 30 + "\n\n"
+
+            for i, record in enumerate(records, 1):
                 timestamp = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
-                formatted_time = timestamp.strftime('%d.%m %H:%M')
-                
-                if record['action'] == "не в части":
-                    action_emoji = "🔴"
-                    action_text = "не в части"
-                elif record['action'] == "в части":
-                    action_emoji = "🟢"
-                    action_text = "в части"
+                formatted_date = timestamp.strftime('%d.%m.%Y')
+                formatted_time = timestamp.strftime('%H:%M')
+
+                if record['action'] == 'не в части':
+                    action_emoji = "🚶"
+                    action_text = "**убыл**"
+                    status_color = "🔴"
                 else:
-                    action_emoji = "🔴" if "убыл" in record['action'] else "🟢"
-                    action_text = record['action']
-                
-                location = record['location'][:20] + "..." if len(record['location']) > 20 else record['location']
-                text += f"{i}. 👤 {record['full_name']}\n"
-                text += f"   {action_emoji} {action_text} - {location}\n"
-                text += f"   ⏰ {formatted_time}\n\n"
-            
-            text += f"📊 Всего записей: {result['total_records']}"
-            
-            # Создаем клавиатуру с пагинацией
-            keyboard = get_admin_journal_keyboard(page, result['total_pages'], days)
+                    action_emoji = "🏠"
+                    action_text = "**прибыл**"
+                    status_color = "🟢"
 
-        await callback.message.edit_text(text, reply_markup=keyboard)
-        
+                text += f"{status_color} {i}. 👤 **{record['full_name']}**\n"
+                text += f"{action_emoji} {action_text} - {record['location']}\n"
+                text += f"📅 {formatted_date} в {formatted_time}\n"
+
+                if i < len(records):
+                    text += "─" * 25 + "\n\n"
+
+        keyboard = [
+            [InlineKeyboardButton("📊 Статистика", callback_data="admin_journal_stats")],
+            [InlineKeyboardButton("📤 Экспорт Excel", callback_data="admin_journal_export")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]
+        ]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await callback.message.edit_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+        await callback.answer()
+
     except Exception as e:
-        logging.error(f"Ошибка в show_admin_journal_page: {e}")
-        await callback.answer("❌ Ошибка получения данных", show_alert=True)
+        logging.error(f"Ошибка получения журнала: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка при получении журнала.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="admin_journal")]])
+        )
+        await callback.answer()
 
-def get_admin_journal_keyboard(current_page: int, total_pages: int, days: int = 7):
-    """Создать клавиатуру админского журнала с пагинацией"""
-    keyboard = []
-    
-    # Кнопки фильтров по периоду
-    period_row = []
-    period_row.append(InlineKeyboardButton(text="1д" if days == 1 else "📅1д", callback_data="admin_journal_1"))
-    period_row.append(InlineKeyboardButton(text="7д" if days == 7 else "📅7д", callback_data="admin_journal_7"))
-    period_row.append(InlineKeyboardButton(text="30д" if days == 30 else "📅30д", callback_data="admin_journal_30"))
-    keyboard.append(period_row)
-    
-    # Пагинация
-    if total_pages > 1:
-        pagination_row = []
-        
-        if current_page > 1:
-            pagination_row.append(InlineKeyboardButton(text="⬅️ Пред", callback_data=f"admin_journal_page_{current_page - 1}_{days}"))
-        
-        pagination_row.append(InlineKeyboardButton(text=f"{current_page}/{total_pages}", callback_data="admin_journal_info"))
-        
-        if current_page < total_pages:
-            pagination_row.append(InlineKeyboardButton(text="След ➡️", callback_data=f"admin_journal_page_{current_page + 1}_{days}"))
-        
-        keyboard.append(pagination_row)
-    
-    # Дополнительные функции
-    keyboard.append([InlineKeyboardButton(text="📤 Экспорт", callback_data="admin_export")])
-    keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="admin_panel")])
-    
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+#async def show_admin_journal_page(callback: CallbackQuery, page: int, days: int = 7):
+#    """Показать страницу админского журнала"""
+#    try:
+#        per_page = 8
+#
+#        # Получаем записи с пагинацией
+#        result = db.get_records_paginated(page=page, per_page=per_page, days=days)
+#
+#        if not result['records']:
+#            text = f"📋 Записей за последние {days} дней не найдено."
+#            keyboard = get_back_keyboard("admin_panel")
+#        else:
+#            text = f"📋 Журнал событий за {days} дней (стр. {page}/{result['total_pages']}):\n\n"
+#
+#            for i, record in enumerate(result['records'], 1):
+#                timestamp = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
+#                formatted_time = timestamp.strftime('%d.%m %H:%M')
+#
+#                if record['action'] == "не в части":
+#                    action_emoji = "🔴"
+#                    action_text = "не в части"
+#                elif record['action'] == "в части":
+#                    action_emoji = "🟢"
+#                    action_text = "в части"
+#                else:
+#                    action_emoji = "🔴" if "убыл" in record['action'] else "🟢"
+#                    action_text = record['action']
+#
+#                location = record['location'][:20] + "..." if len(record['location']) > 20 else record['location']
+#                text += f"{i}. 👤 {record['full_name']}\n"
+#                text += f"   {action_emoji} {action_text} - {location}\n"
+#                text += f"   ⏰ {formatted_time}\n\n"
+#
+#            text += f"📊 Всего записей: {result['total_records']}"
+#
+#            # Создаем клавиатуру с пагинацией
+#            keyboard = get_admin_journal_keyboard(page, result['total_pages'], days)
+#
+#        await callback.message.edit_text(text, reply_markup=keyboard)
+#
+#    except Exception as e:
+#        logging.error(f"Ошибка в show_admin_journal_page: {e}")
+#        await callback.answer("❌ Ошибка получения данных", show_alert=True)
+
+#def get_admin_journal_keyboard(current_page: int, total_pages: int, days: int = 7):
+#    """Создать клавиатуру админского журнала с пагинацией"""
+#    keyboard = []
+#
+#    # Кнопки фильтров по периоду
+#    period_row = []
+#    period_row.append(InlineKeyboardButton(text="1д" if days == 1 else "📅1д", callback_data="admin_journal_1"))
+#    period_row.append(InlineKeyboardButton(text="7д" if days == 7 else "📅7д", callback_data="admin_journal_7"))
+#    period_row.append(InlineKeyboardButton(text="30д" if days == 30 else "📅30д", callback_data="admin_journal_30"))
+#    keyboard.append(period_row)
+#
+#    # Пагинация
+#    if total_pages > 1:
+#        pagination_row = []
+#
+#        if current_page > 1:
+#            pagination_row.append(InlineKeyboardButton(text="⬅️ Пред", callback_data=f"admin_journal_page_{current_page - 1}_{days}"))
+#
+#        pagination_row.append(InlineKeyboardButton(text=f"{current_page}/{total_pages}", callback_data="admin_journal_info"))
+#
+#        if current_page < total_pages:
+#            pagination_row.append(InlineKeyboardButton(text="След ➡️", callback_data=f"admin_journal_page_{current_page + 1}_{days}"))
+#
+#        keyboard.append(pagination_row)
+#
+#    # Дополнительные функции
+#    keyboard.append([InlineKeyboardButton(text="📤 Экспорт", callback_data="admin_export")])
+#    keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="admin_panel")])
+#
+#    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 # Обработчики пагинации админского журнала
-@router.callback_query(F.data.startswith("admin_journal_page_"))
-async def callback_admin_journal_pagination(callback: CallbackQuery):
-    """Обработка пагинации админского журнала"""
-    try:
-        parts = callback.data.split("_")
-        page = int(parts[3])
-        days = int(parts[4]) if len(parts) > 4 else 7
-        
-        await show_admin_journal_page(callback, page, days)
-        await callback.answer()
-    except Exception as e:
-        logging.error(f"Ошибка в admin_journal_pagination: {e}")
-        await callback.answer("❌ Ошибка при переходе по страницам")
+#@router.callback_query(F.data.startswith("admin_journal_page_"))
+#async def callback_admin_journal_pagination(callback: CallbackQuery):
+#    """Обработка пагинации админского журнала"""
+#    try:
+#        parts = callback.data.split("_")
+#        page = int(parts[3])
+#        days = int(parts[4]) if len(parts) > 4 else 7
+#
+#        await show_admin_journal_page(callback, page, days)
+#        await callback.answer()
+#    except Exception as e:
+#        logging.error(f"Ошибка в admin_journal_pagination: {e}")
+#        await callback.answer("❌ Ошибка при переходе по страницам")
 
-@router.callback_query(F.data.in_(["admin_journal_1", "admin_journal_7", "admin_journal_30"]))
-async def callback_admin_journal_period(callback: CallbackQuery):
-    """Обработка смены периода в админском журнале"""
-    try:
-        days = int(callback.data.split("_")[-1])
-        await show_admin_journal_page(callback, 1, days)
-        await callback.answer()
-    except Exception as e:
-        logging.error(f"Ошибка в admin_journal_period: {e}")
-        await callback.answer("❌ Ошибка при смене периода")
+#@router.callback_query(F.data.in_(["admin_journal_1", "admin_journal_7", "admin_journal_30"]))
+#async def callback_admin_journal_period(callback: CallbackQuery):
+#    """Обработка смены периода в админском журнале"""
+#    try:
+#        days = int(callback.data.split("_")[-1])
+#        await show_admin_journal_page(callback, 1, days)
+#        await callback.answer()
+#    except Exception as e:
+#        logging.error(f"Ошибка в admin_journal_period: {e}")
+#        await callback.answer("❌ Ошибка при смене периода")
 
 @router.callback_query(F.data == "admin_journal_info")
 async def callback_admin_journal_info(callback: CallbackQuery):
