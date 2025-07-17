@@ -722,7 +722,8 @@ async def callback_export_action(callback: CallbackQuery):
                     InlineKeyboardButton(text="📅 Вчера", callback_data="export_period_yesterday")
                 ],
                 [
-                    InlineKeyboardButton(text="📅 Последние 7 дней", callback_data="export_period_week"),
+                    InlineKeyboardButton(```python
+text="📅 Последние 7 дней", callback_data="export_period_week"),
                     InlineKeyboardButton(text="📅 Последние 30 дней", callback_data="export_period_month")
                 ],
                 [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_export_menu")]
@@ -741,10 +742,22 @@ async def callback_export_action(callback: CallbackQuery):
             filename = db.export_to_csv(days=30) if records else None
             period_text = "CSV экспорт за 30 дней"
         elif export_type == "pdf":
+            keyboard = [
+                [
+                    InlineKeyboardButton(text="📅 Сегодня", callback_data="export_pdf_today"),
+                    InlineKeyboardButton(text="📅 Вчера", callback_data="export_pdf_yesterday")
+                ],
+                [
+                    InlineKeyboardButton(text="📅 Последние 7 дней", callback_data="export_pdf_week"),
+                    InlineKeyboardButton(text="📅 Последние 30 дней", callback_data="export_pdf_month")
+                ],
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_export_menu")]
+            ]
+
             await callback.message.edit_text(
-                "⚙️ **PDF экспорт в разработке**\n\n"
-                "Эта функция будет доступна в следующих обновлениях.",
-                reply_markup=get_back_keyboard("admin_export_menu"),
+                "📅 **Выберите период для PDF экспорта:**\n\n"
+                "Выберите временной интервал для PDF экспорта данных:",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
                 parse_mode="Markdown"
             )
             await callback.answer()
@@ -839,11 +852,11 @@ async def callback_export_action(callback: CallbackQuery):
         logging.error(f"Ошибка экспорта: {e}")
         await callback.message.edit_text(
             f"❌ **Ошибка экспорта**\n\n"
-            f"Произошла ошибка: {str(e)}",
+            f"Произошла ошибка при создании файла экспорта.",
             reply_markup=get_back_keyboard("admin_export_menu"),
             parse_mode="Markdown"
         )
-        await callback.answer("❌ Ошибка при экспорте", show_alert=True)
+        await callback.answer("❌ Ошибка экспорта", show_alert=True)
 
 @router.callback_query(F.data.startswith("export_period_"))
 async def callback_export_period(callback: CallbackQuery):
@@ -857,6 +870,7 @@ async def callback_export_period(callback: CallbackQuery):
 
     try:
         from datetime import datetime, timedelta
+        from aiogram.types import BufferedInputFile
 
         # Сначала показываем сообщение о начале экспорта
         await callback.message.edit_text(
@@ -868,8 +882,7 @@ async def callback_export_period(callback: CallbackQuery):
         if period == "today":
             # Экспорт за сегодня
             records = db.get_records_today()
-            today = datetime.now().date()
-            period_text = f"за сегодня ({today.strftime('%d.%m.%Y')})"
+            period_text = f"за сегодня ({datetime.now().strftime('%d.%m.%Y')})"
             filename_period = "today"
 
         elif period == "yesterday":
@@ -881,117 +894,96 @@ async def callback_export_period(callback: CallbackQuery):
 
         elif period == "week":
             # Экспорт за неделю
-            records = db.get_all_records(days=7, limit=1000)
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=7)
+            records = db.get_records_by_period(start_date, end_date)
             period_text = "за последние 7 дней"
             filename_period = "week"
 
         elif period == "month":
             # Экспорт за месяц
-            records = db.get_all_records(days=30, limit=1000)
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=30)
+            records = db.get_records_by_period(start_date, end_date)
             period_text = "за последние 30 дней"
             filename_period = "month"
+
         else:
             await callback.answer("❌ Неизвестный период", show_alert=True)
             return
 
-        # Создаем файл экспорта
-        if records and len(records) > 0:
-            filename = db.export_records_to_excel(records, period_text)
+        # Проверяем есть ли данные
+        if records:
+            try:
+                # Создаем временные границы для корректного экспорта
+                if period == "today":
+                    start_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+                    end_date = datetime.now().replace(hour=23, minute=59, second=59, microsecond=999999)
+                elif period == "yesterday":
+                    yesterday_date = datetime.now().date() - timedelta(days=1)
+                    start_date = datetime.combine(yesterday_date, datetime.min.time())
+                    end_date = datetime.combine(yesterday_date, datetime.max.time())
+                elif period == "week":
+                    end_date = datetime.now()
+                    start_date = end_date - timedelta(days=7)
+                elif period == "month":
+                    end_date = datetime.now()
+                    start_date = end_date - timedelta(days=30)
 
-            if filename:
-                from aiogram.types import FSInputFile
-                import os
+                # Создаем Excel файл
+                filename = db.export_records_to_excel(start_date, end_date, filename_period)
 
-                if os.path.exists(filename):
-                    # Отправляем файл
-                    document = FSInputFile(filename, filename=f"military_records_{filename_period}_{datetime.now().strftime('%Y%m%d')}.xlsx")
-                    caption_text = f"📤 Экспорт {period_text}\n📊 Записей: {len(records)}"
+                if filename:
+                    # Отправляем файл пользователю
+                    with open(filename, 'rb') as file:
+                        await callback.message.answer_document(
+                            document=BufferedInputFile(file.read(), filename=filename),
+                            caption=f"📊 **Экспорт данных {period_text}**\n\n"
+                                   f"📈 Всего записей: {len(records)}\n"
+                                   f"📅 Период: {period_text}",
+                            parse_mode="Markdown"
+                        )
 
-                    await callback.message.answer_document(
-                        document,
-                        caption=caption_text
-                    )
-
-                    # Удаляем временный файл после отправки
+                    # Удаляем временный файл
+                    import os
                     try:
                         os.remove(filename)
-                    except Exception as cleanup_error:
-                        logging.warning(f"Не удалось удалить временный файл: {cleanup_error}")
-
-                    # Обновляем сообщение
-                    result_text = f"✅ **Экспорт завершен**\n\n📤 Данные {period_text} успешно экспортированы и отправлены.\n📊 Обработано записей: {len(records)}"
+                    except:
+                        pass
 
                     await callback.message.edit_text(
-                        result_text,
+                        f"✅ **Экспорт завершен!**\n\n"
+                        f"📊 Данные {period_text} успешно экспортированы в Excel.\n"
+                        f"📈 Всего записей: {len(records)}",
                         reply_markup=get_back_keyboard("admin_export_menu"),
                         parse_mode="Markdown"
                     )
-                    await callback.answer("✅ Файл отправлен")
+                    await callback.answer("✅ Экспорт завершен!", show_alert=False)
                 else:
                     await callback.message.edit_text(
-                        "❌ **Ошибка создания файла**\n\n"
-                        "Не удалось создать Excel файл.",
+                        f"❌ **Ошибка экспорта**\n\n"
+                        f"Не удалось создать файл экспорта.",
                         reply_markup=get_back_keyboard("admin_export_menu"),
                         parse_mode="Markdown"
                     )
                     await callback.answer("❌ Ошибка создания файла", show_alert=True)
-            else:
+            except Exception as e:
+                logging.error(f"Ошибка экспорта: {e}")
                 await callback.message.edit_text(
-                    "❌ **Ошибка экспорта**\n\n"
-                    "Не удалось подготовить данные для экспорта.",
+                    f"❌ **Ошибка экспорта**\n\n"
+                    f"Произошла ошибка при создании файла экспорта.",
                     reply_markup=get_back_keyboard("admin_export_menu"),
                     parse_mode="Markdown"
                 )
-                await callback.answer("❌ Ошибка при экспорте", show_alert=True)
+                await callback.answer("❌ Ошибка экспорта", show_alert=True)
         else:
-            # Если нет записей, создаем пустой файл с информацией
-            filename = db.create_empty_export_file(period_text)
-
-            if filename:
-                from aiogram.types import FSInputFile
-                import os
-
-                if os.path.exists(filename):
-                    # Отправляем пустой файл
-                    document = FSInputFile(filename, filename=f"military_records_{filename_period}_empty_{datetime.now().strftime('%Y%m%d')}.xlsx")
-                    caption_text = f"📤 Экспорт {period_text}\n❌ Нет данных за выбранный период"
-
-                    await callback.message.answer_document(
-                        document,
-                        caption=caption_text
-                    )
-
-                    # Удаляем временный файл после отправки
-                    try:
-                        os.remove(filename)
-                    except Exception as cleanup_error:
-                        logging.warning(f"Не удалось удалить временный файл: {cleanup_error}")
-
-                    # Обновляем сообщение
-                    result_text = f"✅ **Экспорт завершен**\n\n📤 Файл {period_text} создан.\n❌ За этот период нет записей о движении персонала."
-
-                    await callback.message.edit_text(
-                        result_text,
-                        reply_markup=get_back_keyboard("admin_export_menu"),
-                        parse_mode="Markdown"
-                    )
-                    await callback.answer("✅ Файл отправлен")
-                else:
-                    await callback.message.edit_text(
-                        "❌ **Ошибка создания файла**\n\n"
-                        "Не удалось создать Excel файл.",
-                        reply_markup=get_back_keyboard("admin_export_menu"),
-                        parse_mode="Markdown"
-                    )
-                    await callback.answer("❌ Ошибка создания файла", show_alert=True)
-            else:
-                await callback.message.edit_text(
-                    "❌ **Ошибка экспорта**\n\n"
-                    "Не удалось создать файл экспорта.",
-                    reply_markup=get_back_keyboard("admin_export_menu"),
-                    parse_mode="Markdown"
-                )
-                await callback.answer("❌ Ошибка при экспорте", show_alert=True)
+            await callback.message.edit_text(
+                f"❌ **Нет данных для экспорта**\n\n"
+                f"За период ({period_text}) нет записей для экспорта.",
+                reply_markup=get_back_keyboard("admin_export_menu"),
+                parse_mode="Markdown"
+            )
+            await callback.answer("❌ Нет данных для экспорта", show_alert=True)
 
     except Exception as e:
         logging.error(f"Ошибка экспорта периода: {e}")
@@ -1474,75 +1466,4 @@ async def callback_settings_action(callback: CallbackQuery):
 
             await callback.message.edit_text(
                 text,
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
-                parse_mode="Markdown"
-            )
-            await callback.answer()
-            return
-
-        elif action == "confirm" and "full" in callback.data:
-            # Выполняем полную очистку
-            deleted_count = db.clear_all_records()
-            text = f"🗑️ **Полная очистка выполнена**\n\n"
-            text += f"Удалено всех записей: {deleted_count}\n"
-            text += "Все данные о движении персонала удалены.\n\n"
-            text += "⚠️ Пользователи остались в системе"
-
-        elif action == "optimize":
-            # Оптимизируем базу данных
-            db.optimize_database()
-            text = "🔄 **Оптимизация завершена**\n\n"
-            text += "Выполнены операции:\n"
-            text += "• VACUUM - дефрагментация\n"
-            text += "• ANALYZE - обновление статистики\n"
-            text += "• Перестроение индексов\n\n"
-            text += "✅ База данных оптимизирована"
-
-        elif action == "db" and "stats" in callback.data:
-            # Показываем статистику БД
-            stats = db.get_database_stats()
-            text = "📊 **Статистика базы данных**\n\n"
-            text += f"👥 Пользователей: {stats.get('users_count', 0)}\n"
-            text += f"📝 Записей: {stats.get('records_count', 0)}\n"
-            text += f"👑 Администраторов: {stats.get('admins_count', 0)}\n\n"
-            text += f"💾 Размер БД: {stats.get('db_size_mb', 0):.2f} МБ\n"
-            text += f"📈 Активность: {stats.get('records_count', 0) / max(stats.get('users_count', 1), 1):.1f} записей/пользователь"
-
-        elif action == "system" and "info" in callback.data:
-            # Системная информация
-            import psutil
-            import platform
-
-            text = "💻 **Системная информация**\n\n"
-            text += f"🐍 Python: {platform.python_version()}\n"
-            text += f"💻 Система: {platform.system()}\n"
-            text += f"📊 ОЗУ: {psutil.virtual_memory().percent}%\n"
-            text += f"💾 Диск: {psutil.disk_usage('/').percent}%\n"
-            text += f"⏰ Время работы: {datetime.now().strftime('%H:%M:%S')}\n\n"
-            text += "🔧 Статус компонентов:\n"
-            text += "✅ База данных\n"
-            text += "✅ Telegram API\n"
-            text += "✅ Планировщик задач"
-
-        elif action == "technical":
-            text = "🛠️ **Технические настройки**\n\n"
-            text += "Доступные параметры:\n"
-            text += "• Лимиты запросов к API\n"
-            text += "• Таймауты соединений\n"
-            text += "• Размеры буферов\n"
-            text += "• Параметры кеширования\n\n"
-            text += "⚙️ Интерфейс настроек в разработке"
-
-        else:
-            text = "⚙️ Функция в разработке"
-
-        await callback.message.edit_text(
-            text,
-            reply_markup=get_back_keyboard("admin_settings"),
-            parse_mode="Markdown"
-        )
-        await callback.answer()
-
-    except Exception as e:
-        logging.error(f"Ошибка в settings_action: {e}")
-        await callback.answer("❌ Ошибка выполнения действия", show_alert=True)
+                reply_markup=

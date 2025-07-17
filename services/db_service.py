@@ -556,7 +556,6 @@ class DatabaseService:
             return None
 
 
-
     def get_records_by_date(self, date_str: str) -> List[Dict[str, Any]]:
         """Получить записи за конкретную дату"""
         try:
@@ -783,8 +782,7 @@ class DatabaseService:
                 )
 
 # Форматируем заголовки
-                for cell in worksheet[1]:
-                    cell.fill = header_fill
+                for cell in worksheet[1]:cell.fill = header_fill
                     cell.font = header_font
                     cell.alignment = Alignment(horizontal='center', vertical='center')
                     cell.border = border
