@@ -44,20 +44,7 @@ async def cmd_stats(message: Message):
         await message.answer(stats_text, parse_mode="Markdown")
 
     except Exception as e:
-        await message.answer(f"❌ Ошибка получения статистики: {e}")ogram.filters import Command
-from services.db_service import DatabaseService
-from config import MAIN_ADMIN_ID
-import logging
-from datetime import datetime, timedelta
-
-router = Router()
-db = DatabaseService()
-
-async def is_admin(user_id: int) -> bool:
-    """Проверить права администратора"""
-    if user_id == MAIN_ADMIN_ID:
-        return True
-    return db.is_admin(user_id)
+        await message.answer(f"❌ Ошибка получения статистики: {e}")
 
 @router.callback_query(F.data == "admin_stats")
 async def callback_admin_stats(callback: CallbackQuery):
