@@ -677,7 +677,7 @@ async def callback_export_action(callback: CallbackQuery):
         await callback.answer("❌ У вас нет прав администратора", show_alert=True)
         return
 
-    export_type = callback.data.split("_")[-1]
+    export_type = callback.data.replace("export_", "")
 
     try:
         # Показываем сообщение о начале экспорта
@@ -687,11 +687,11 @@ async def callback_export_action(callback: CallbackQuery):
             parse_mode="Markdown"
         )
 
-        if export_type == "all":
+        if export_type == "excel_all":
             records = db.get_all_records(days=365, limit=10000)
             filename = db.export_records_to_excel(records, "все данные за год") if records else db.create_empty_export_file("все данные")
             period_text = "все данные"
-        elif export_type == "filter":
+        elif export_type == "excel_filter":
             # Показываем меню выбора периода
             keyboard = [
                 [
