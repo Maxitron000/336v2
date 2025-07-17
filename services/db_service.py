@@ -484,7 +484,7 @@ class DatabaseService:
             df['Время'] = df['Дата_Время'].dt.strftime('%H:%M:%S')
 
             # Выбираем нужные колонки в правильном порядке
-            df = df[['ФИО', 'Действие', 'Локация', 'Дата', 'Время']]
+            df = df = df[['ФИО', 'Действие', 'Локация', 'Дата', 'Время']]
 
             # Сохраняем в файл
             filename = f"military_records_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
@@ -788,8 +788,7 @@ class DatabaseService:
 
                 # Форматируем заголовки
                 for cell in worksheet[1]:
-                    cell.fill =```python
- header_fill
+                    cell.fill = header_fill
                     cell.font = header_font
                     cell.alignment = Alignment(horizontal='center', vertical='center')
                     cell.border = border
