@@ -173,6 +173,126 @@ class DatabaseService:
             logging.error(f"Ошибка получения всех записей: {e}")
             return []
 
+    def get_records_paginated(self, page: int = 1, per_page: int = 10, days: int = 7, 
+                            user_filter: str = None, location_filter: str = None) -> Dict[str, Any]:
+        """Получить записи с пагинацией и фильтрами"""
+        try:
+            offset = (page - 1) * per_page
+            since_date = datetime.now() - timedelta(days=days)
+            
+            # Базовый запрос
+            base_query = '''
+                SELECT r.*, u.full_name 
+                FROM records r
+                JOIN users u ON r.user_id = u.id
+                WHERE r.timestamp > ?
+            '''
+            count_query = '''
+                SELECT COUNT(*) as total
+                FROM records r
+                JOIN users u ON r.user_id = u.id
+                WHERE r.timestamp > ?
+            '''
+            
+            params = [since_date]
+            
+            # Добавляем фильтры
+            if user_filter:
+                base_query += ' AND u.full_name LIKE ?'
+                count_query += ' AND u.full_name LIKE ?'
+                params.append(f'%{user_filter}%')
+            
+            if location_filter:
+                base_query += ' AND r.location LIKE ?'
+                count_query += ' AND r.location LIKE ?'
+                params.append(f'%{location_filter}%')
+            
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                
+                # Получаем общее количество
+                total_cursor = conn.execute(count_query, params)
+                total_records = total_cursor.fetchone()['total']
+                
+                # Получаем записи для текущей страницы
+                base_query += ' ORDER BY r.timestamp DESC LIMIT ? OFFSET ?'
+                cursor = conn.execute(base_query, params + [per_page, offset])
+                records = [dict(row) for row in cursor.fetchall()]
+                
+                total_pages = (total_records + per_page - 1) // per_page
+                
+                return {
+                    'records': records,
+                    'current_page': page,
+                    'total_pages': total_pages,
+                    'total_records': total_records,
+                    'per_page': per_page,
+                    'has_prev': page > 1,
+                    'has_next': page < total_pages
+                }
+                
+        except Exception as e:
+            logging.error(f"Ошибка получения записей с пагинацией: {e}")
+            return {
+                'records': [],
+                'current_page': 1,
+                'total_pages': 0,
+                'total_records': 0,
+                'per_page': per_page,
+                'has_prev': False,
+                'has_next': False
+            }
+
+    def get_users_paginated(self, page: int = 1, per_page: int = 20, search: str = None) -> Dict[str, Any]:
+        """Получить пользователей с пагинацией"""
+        try:
+            offset = (page - 1) * per_page
+            
+            base_query = 'SELECT * FROM users'
+            count_query = 'SELECT COUNT(*) as total FROM users'
+            params = []
+            
+            if search:
+                base_query += ' WHERE full_name LIKE ? OR username LIKE ?'
+                count_query += ' WHERE full_name LIKE ? OR username LIKE ?'
+                params = [f'%{search}%', f'%{search}%']
+            
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                
+                # Получаем общее количество
+                total_cursor = conn.execute(count_query, params)
+                total_users = total_cursor.fetchone()['total']
+                
+                # Получаем пользователей для текущей страницы
+                base_query += ' ORDER BY full_name LIMIT ? OFFSET ?'
+                cursor = conn.execute(base_query, params + [per_page, offset])
+                users = [dict(row) for row in cursor.fetchall()]
+                
+                total_pages = (total_users + per_page - 1) // per_page
+                
+                return {
+                    'users': users,
+                    'current_page': page,
+                    'total_pages': total_pages,
+                    'total_users': total_users,
+                    'per_page': per_page,
+                    'has_prev': page > 1,
+                    'has_next': page < total_pages
+                }
+                
+        except Exception as e:
+            logging.error(f"Ошибка получения пользователей с пагинацией: {e}")
+            return {
+                'users': [],
+                'current_page': 1,
+                'total_pages': 0,
+                'total_users': 0,
+                'per_page': per_page,
+                'has_prev': False,
+                'has_next': False
+            }
+
     def get_current_status(self) -> Dict[str, Any]:
         """Получить текущий статус всех пользователей"""
         try:
@@ -247,10 +367,10 @@ class DatabaseService:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.execute('''
-                    SELECT u.id, u.username, u.full_name, a.added_at
+                    SELECT u.id, u.username, u.full_name
                     FROM admins a
                     JOIN users u ON a.user_id = u.id
-                    ORDER BY a.added_at
+                    ORDER BY u.full_name
                 ''')
                 return [dict(row) for row in cursor.fetchall()]
         except Exception as e:

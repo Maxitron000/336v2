@@ -36,26 +36,80 @@ def get_main_menu_keyboard(is_admin: bool = False):
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_location_keyboard(action: str):
-    """Создать клавиатуру локаций"""
-    keyboard = []
-    for i in range(0, len(LOCATIONS), 2):
-        row = []
-        for j in range(i, min(i + 2, len(LOCATIONS))):
-            location = LOCATIONS[j]
-            row.append(InlineKeyboardButton(
-                text=location,
-                callback_data=f"location_{action}_{location}"
-            ))
-        keyboard.append(row)
-
-    keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")])
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+    """Создать клавиатуру локаций с пагинацией"""
+    return get_location_keyboard_with_pagination(action, 1)
 
 def get_journal_keyboard():
     """Создать клавиатуру журнала"""
     keyboard = [
         [InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")]
     ]
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+def get_journal_keyboard_with_pagination(current_page: int, total_pages: int):
+    """Создать клавиатуру журнала с пагинацией"""
+    keyboard = []
+    
+    # Кнопки пагинации
+    if total_pages > 1:
+        pagination_row = []
+        
+        if current_page > 1:
+            pagination_row.append(InlineKeyboardButton(text="⬅️ Пред", callback_data=f"journal_page_{current_page - 1}"))
+        
+        pagination_row.append(InlineKeyboardButton(text=f"{current_page}/{total_pages}", callback_data="journal_info"))
+        
+        if current_page < total_pages:
+            pagination_row.append(InlineKeyboardButton(text="След ➡️", callback_data=f"journal_page_{current_page + 1}"))
+        
+        keyboard.append(pagination_row)
+    
+    # Кнопка назад
+    keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+def get_location_keyboard_with_pagination(action: str, current_page: int = 1):
+    """Создать клавиатуру локаций с пагинацией"""
+    per_page = 8  # 4 строки по 2 кнопки
+    start_idx = (current_page - 1) * per_page
+    end_idx = start_idx + per_page
+    
+    page_locations = LOCATIONS[start_idx:end_idx]
+    total_pages = (len(LOCATIONS) + per_page - 1) // per_page
+    
+    keyboard = []
+    
+    # Кнопки локаций
+    for i in range(0, len(page_locations), 2):
+        row = []
+        for j in range(i, min(i + 2, len(page_locations))):
+            location = page_locations[j]
+            row.append(InlineKeyboardButton(
+                text=location,
+                callback_data=f"location_{action}_{location}"
+            ))
+        keyboard.append(row)
+    
+    # Добавляем кнопку "Другое" только для убыли
+    if action == "убыл":
+        keyboard.append([InlineKeyboardButton(text="📝 Другое", callback_data=f"location_{action}_📝 Другое")])
+    
+    # Пагинация для локаций
+    if total_pages > 1:
+        pagination_row = []
+        
+        if current_page > 1:
+            pagination_row.append(InlineKeyboardButton(text="⬅️", callback_data=f"locations_page_{action}_{current_page - 1}"))
+        
+        pagination_row.append(InlineKeyboardButton(text=f"{current_page}/{total_pages}", callback_data="locations_info"))
+        
+        if current_page < total_pages:
+            pagination_row.append(InlineKeyboardButton(text="➡️", callback_data=f"locations_page_{action}_{current_page + 1}"))
+        
+        keyboard.append(pagination_row)
+    
+    keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 @router.message(Command("start"))
@@ -337,9 +391,9 @@ async def callback_action_selection(callback: CallbackQuery):
                 await callback.answer()
                 return
 
-            # Для "Убыл" показываем выбор локаций
+            # Для "Убыл" показываем выбор локаций с пагинацией
             await callback.message.edit_text(
-                "Выберите локацию, куда вы убыли:",
+                f"Выберите локацию, куда вы убыли:\n\n📍 Показано {min(8, len(LOCATIONS))} из {len(LOCATIONS)} локаций",
                 reply_markup=get_location_keyboard("убыл")
             )
 
@@ -438,7 +492,7 @@ async def callback_location_selection(callback: CallbackQuery, state: FSMContext
 
 @router.callback_query(F.data == "show_journal")
 async def callback_show_journal(callback: CallbackQuery):
-    """Показать журнал пользователя"""
+    """Показать журнал пользователя с пагинацией"""
     try:
         user_id = callback.from_user.id
         
@@ -452,12 +506,38 @@ async def callback_show_journal(callback: CallbackQuery):
             await callback.answer()
             return
 
-        records = db.get_user_records(user_id, 5)
+        await show_user_journal_page(callback, user_id, 1)
+        await callback.answer()
+    except Exception as e:
+        logging.error(f"Ошибка в callback_show_journal: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка при загрузке журнала.\nПопробуйте позже.",
+            reply_markup=get_journal_keyboard()
+        )
+        await callback.answer()
+
+async def show_user_journal_page(callback: CallbackQuery, user_id: int, page: int):
+    """Показать страницу журнала пользователя"""
+    try:
+        per_page = 5
+        offset = (page - 1) * per_page
+        
+        # Получаем общее количество записей
+        all_records = db.get_user_records(user_id, 1000)  # Получаем все для подсчета
+        total_records = len(all_records)
+        total_pages = (total_records + per_page - 1) // per_page if total_records > 0 else 1
+        
+        # Получаем записи для текущей страницы
+        records = db.get_user_records(user_id, per_page)
+        if offset > 0:
+            # Для простоты берем нужные записи из общего списка
+            records = all_records[offset:offset + per_page]
 
         if not records:
             text = "📋 Ваш журнал пуст.\n\nУ вас пока нет записей.\nОтметьтесь, используя кнопки меню."
+            keyboard = get_journal_keyboard()
         else:
-            text = "📋 Ваш журнал (последние 5 записей):\n\n"
+            text = f"📋 Ваш журнал (стр. {page}/{total_pages}):\n\n"
             for i, record in enumerate(records, 1):
                 try:
                     timestamp = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
@@ -474,23 +554,25 @@ async def callback_show_journal(callback: CallbackQuery):
                         action_emoji = "🔴" if "убыл" in record['action'] else "🟢"
                         action_text = record['action']
                     
-                    location = record['location'][:30] + "..." if len(record['location']) > 30 else record['location']
-                    text += f"{i}. {action_emoji} {action_text}\n"
+                    location = record['location'][:25] + "..." if len(record['location']) > 25 else record['location']
+                    text += f"{i + offset}. {action_emoji} {action_text}\n"
                     text += f"📍 {location}\n"
                     text += f"⏰ {formatted_time}\n\n"
                 except Exception as e:
                     logging.error(f"Ошибка обработки записи: {e}")
                     continue
+            
+            # Создаем клавиатуру с пагинацией
+            keyboard = get_journal_keyboard_with_pagination(page, total_pages)
 
-        await callback.message.edit_text(text, reply_markup=get_journal_keyboard())
-        await callback.answer()
+        await callback.message.edit_text(text, reply_markup=keyboard)
+        
     except Exception as e:
-        logging.error(f"Ошибка в callback_show_journal: {e}")
+        logging.error(f"Ошибка в show_user_journal_page: {e}")
         await callback.message.edit_text(
             "❌ Ошибка при загрузке журнала.\nПопробуйте позже.",
             reply_markup=get_journal_keyboard()
         )
-        await callback.answer()
 
 # Словарь для отслеживания последних действий пользователей
 user_last_action = {}
@@ -507,6 +589,42 @@ def can_user_make_action(user_id: int) -> bool:
 def update_user_last_action(user_id: int):
     """Обновляет время последнего действия пользователя"""
     user_last_action[user_id] = datetime.now()
+
+# Обработчики пагинации журнала
+@router.callback_query(F.data.startswith("journal_page_"))
+async def callback_journal_pagination(callback: CallbackQuery):
+    """Обработка пагинации журнала"""
+    try:
+        page = int(callback.data.split("_")[-1])
+        user_id = callback.from_user.id
+        
+        await show_user_journal_page(callback, user_id, page)
+        await callback.answer()
+    except Exception as e:
+        logging.error(f"Ошибка в journal_pagination: {e}")
+        await callback.answer("❌ Ошибка при переходе по страницам")
+
+@router.callback_query(F.data.startswith("locations_page_"))
+async def callback_locations_pagination(callback: CallbackQuery):
+    """Обработка пагинации локаций"""
+    try:
+        parts = callback.data.split("_")
+        action = parts[2]
+        page = int(parts[3])
+        
+        await callback.message.edit_text(
+            "Выберите локацию, куда вы убыли:",
+            reply_markup=get_location_keyboard_with_pagination(action, page)
+        )
+        await callback.answer()
+    except Exception as e:
+        logging.error(f"Ошибка в locations_pagination: {e}")
+        await callback.answer("❌ Ошибка при переходе по страницам")
+
+@router.callback_query(F.data.in_(["journal_info", "locations_info"]))
+async def callback_pagination_info(callback: CallbackQuery):
+    """Обработка информационных кнопок пагинации"""
+    await callback.answer()
 
 # Обработчик неизвестных сообщений
 @router.message()
