@@ -1460,9 +1460,8 @@ async def callback_settings_action(callback: CallbackQuery):
 
             keyboard = [
                 [InlineKeyboardButton(text="🗑️ ПОДТВЕРДИТЬ ОЧИСТКУ", callback_data="settings_confirm_full_cleanup")],
-                This code fixes an unclosed parenthesis issue in admin.py and ensures the code is complete.
+                [InlineKeyboardButton(text="🔙 Отмена", callback_data="admin_settings")]
 ```python
-[InlineKeyboardButton(text="🔙 Отмена", callback_data="admin_settings")]
             ]
 
             await callback.message.edit_text(
@@ -1485,17 +1484,22 @@ async def callback_settings_action(callback: CallbackQuery):
             text += "База данных оптимизирована.\n"
             text += "Повышена производительность системы."
 
-        elif action == "db_stats":
+        elif action == "db" and "stats" in callback.data:
             # Получаем статистику по базе данных
-            stats = db.get_database_stats()
-            text = "📊 **Статистика базы данных**\n\n"
-            text += f"Размер базы данных: {stats['size']}\n"
-            text += f"Количество таблиц: {stats['tables']}\n"
-            text += f"Количество записей: {stats['records']}\n\n"
-            text += "ℹ️ Информация о базе данных."
+            try:
+                stats = db.get_database_stats()
+                text = "📊 **Статистика базы данных**\n\n"
+                text += f"Размер базы данных: {stats.get('size', 'N/A')}\n"
+                text += f"Количество таблиц: {stats.get('tables', 'N/A')}\n"
+                text += f"Количество записей: {stats.get('records', 'N/A')}\n\n"
+                text += "ℹ️ Информация о базе данных."
+            except:
+                text = "📊 **Статистика базы данных**\n\n"
+                text += "Информация временно недоступна."
 
-        elif action == "system_info":
+        elif action == "system" and "info" in callback.data:
             # Собираем системную информацию
+            import platform
             text = "⚙️ **Системная информация**\n\n"
             text += f"Версия Python: {platform.python_version()}\n"
             text += f"Операционная система: {platform.system()} {platform.release()}\n"
@@ -1523,5 +1527,3 @@ async def callback_settings_action(callback: CallbackQuery):
     except Exception as e:
         logging.error(f"Ошибка в settings_action: {e}")
         await callback.answer("❌ Ошибка выполнения действия", show_alert=True)
-
-import platform
