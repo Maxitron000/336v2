@@ -933,3 +933,27 @@ class DatabaseService:
         except Exception as e:
             logging.error(f"Ошибка создания месячного отчета: {e}")
             return None
+
+    def export_last_7_days(self) -> Optional[str]:
+        """Экспорт данных за последние 7 дней"""
+        try:
+            records = self.get_all_records(days=7, limit=1000)
+            if records:
+                return self.export_records_to_excel(records, "последние 7 дней")
+            else:
+                return self.create_empty_export_file("последние 7 дней")
+        except Exception as e:
+            logging.error(f"Ошибка экспорта за 7 дней: {e}")
+            return None
+
+    def export_last_30_days(self) -> Optional[str]:
+        """Экспорт данных за последние 30 дней"""
+        try:
+            records = self.get_all_records(days=30, limit=1000)
+            if records:
+                return self.export_records_to_excel(records, "последние 30 дней")
+            else:
+                return self.create_empty_export_file("последние 30 дней")
+        except Exception as e:
+            logging.error(f"Ошибка экспорта за 30 дней: {e}")
+            return None
