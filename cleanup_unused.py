@@ -1,3 +1,4 @@
+
 import os
 import logging
 from datetime import datetime, timedelta
@@ -7,161 +8,146 @@ class SystemCleaner:
     def __init__(self):
         self.db = DatabaseService()
         self.logger = logging.getLogger(__name__)
-
-    def cleanup_old_records(self, days=180):
-        """Очистка записей старше указанного количества дней"""
+    
+    def full_cleanup(self) -> dict:
+        """Полная очистка системы"""
+        results = {
+            'records_deleted': 0,
+            'exports_deleted': 0,
+            'logs_deleted': 0,
+            'temp_files_deleted': 0
+        }
+        
         try:
-            deleted_count = self.db.cleanup_old_records(days)
-            self.logger.info(f"Удалено старых записей: {deleted_count}")
-            return deleted_count
+            # Очищаем старые записи (старше 6 месяцев)
+            results['records_deleted'] = self.db.cleanup_old_records(days=180)
+            
+            # Очищаем старые экспорты
+            results['exports_deleted'] = self.cleanup_old_exports()
+            
+            # Очищаем старые логи
+            results['logs_deleted'] = self.cleanup_old_logs()
+            
+            # Очищаем временные файлы
+            results['temp_files_deleted'] = self.cleanup_temp_files()
+            
+            self.logger.info(f"Очистка завершена: {results}")
+            
         except Exception as e:
-            self.logger.error(f"Ошибка при очистке записей: {e}")
-            return 0
-
-    def cleanup_old_exports(self, days=7):
-        """Очистка старых экспортированных файлов"""
+            self.logger.error(f"Ошибка при очистке системы: {e}")
+            
+        return results
+    
+    def cleanup_old_exports(self) -> int:
+        """Очистка старых экспортов"""
         try:
-            deleted_count = 0
-            cutoff_date = datetime.now() - timedelta(days=days)
-
-            # Проверяем папку exports
             exports_dir = "exports"
-            if os.path.exists(exports_dir):
-                # Ищем файлы экспорта в папке exports
-                for filename in os.listdir(exports_dir):
-                    if filename.startswith('military_records_') and (filename.endswith('.xlsx') or filename.endswith('.csv')):
-                        try:
-                            file_path = os.path.join(exports_dir, filename)
-                            # Парсим дату из имени файла
-                            date_part = filename.replace('military_records_', '').replace('.xlsx', '').replace('.csv', '')
-                            if len(date_part) >= 15:  # YYYYMMDD_HHMMSS
-                                file_date = datetime.strptime(date_part[-15:], '%Y%m%d_%H%M%S')
-                                if file_date < cutoff_date:
-                                    os.remove(file_path)
-                                    deleted_count += 1
-                                    self.logger.info(f"Удален старый экспорт: {file_path}")
-                        except Exception as e:
-                            self.logger.warning(f"Ошибка при обработке файла {filename}: {e}")
-
-            # Также проверяем корневую папку на случай старых файлов
-            for filename in os.listdir('.'):
-                if filename.startswith('military_records_') and (filename.endswith('.xlsx') or filename.endswith('.csv')):
-                    try:
-                        file_stat = os.stat(filename)
-                        file_date = datetime.fromtimestamp(file_stat.st_mtime)
-                        if file_date < cutoff_date:
-                            os.remove(filename)
-                            deleted_count += 1
-                            self.logger.info(f"Удален старый экспорт из корня: {filename}")
-                    except Exception as e:
-                        self.logger.warning(f"Ошибка при обработке файла {filename}: {e}")
-
+            if not os.path.exists(exports_dir):
+                return 0
+                
+            deleted_count = 0
+            cutoff_date = datetime.now() - timedelta(days=30)  # Удаляем файлы старше 30 дней
+            
+            for filename in os.listdir(exports_dir):
+                file_path = os.path.join(exports_dir, filename)
+                if os.path.isfile(file_path):
+                    file_time = datetime.fromtimestamp(os.path.getmtime(file_path))
+                    if file_time < cutoff_date:
+                        os.remove(file_path)
+                        deleted_count += 1
+                        
             return deleted_count
+            
         except Exception as e:
-            self.logger.error(f"Ошибка при очистке экспортов: {e}")
+            self.logger.error(f"Ошибка очистки экспортов: {e}")
             return 0
-
-    def cleanup_logs(self, days=30):
+    
+    def cleanup_old_logs(self) -> int:
         """Очистка старых логов"""
         try:
             deleted_count = 0
-            cutoff_date = datetime.now() - timedelta(days=days)
-
-            # Ищем лог файлы
-            for filename in os.listdir('.'):
-                if filename.endswith('.log'):
-                    try:
-                        file_stat = os.stat(filename)
-                        file_date = datetime.fromtimestamp(file_stat.st_mtime)
-
-                        if file_date < cutoff_date:
-                            os.remove(filename)
+            cutoff_date = datetime.now() - timedelta(days=7)  # Удаляем логи старше 7 дней
+            
+            log_patterns = ['*.log', '*.log.*']
+            
+            for pattern in log_patterns:
+                import glob
+                for log_file in glob.glob(pattern):
+                    if os.path.isfile(log_file):
+                        file_time = datetime.fromtimestamp(os.path.getmtime(log_file))
+                        if file_time < cutoff_date:
+                            os.remove(log_file)
                             deleted_count += 1
-                            self.logger.info(f"Удален старый лог: {filename}")
-                    except Exception as e:
-                        self.logger.warning(f"Ошибка при обработке лога {filename}: {e}")
-
+                            
             return deleted_count
+            
         except Exception as e:
-            self.logger.error(f"Ошибка при очистке логов: {e}")
+            self.logger.error(f"Ошибка очистки логов: {e}")
             return 0
-
-    def full_cleanup(self):
-        """Полная очистка системы"""
-        self.logger.info("Начинаем полную очистку системы...")
-
+    
+    def cleanup_temp_files(self) -> int:
+        """Очистка временных файлов"""
+        try:
+            deleted_count = 0
+            temp_patterns = ['*.tmp', '*.temp', '*~', '.#*']
+            
+            for pattern in temp_patterns:
+                import glob
+                for temp_file in glob.glob(pattern):
+                    if os.path.isfile(temp_file):
+                        os.remove(temp_file)
+                        deleted_count += 1
+                        
+            return deleted_count
+            
+        except Exception as e:
+            self.logger.error(f"Ошибка очистки временных файлов: {e}")
+            return 0
+    
+    def cleanup_database_only(self) -> int:
+        """Очистка только базы данных"""
+        try:
+            return self.db.cleanup_old_records(days=180)
+        except Exception as e:
+            self.logger.error(f"Ошибка очистки БД: {e}")
+            return 0
+    
+    def emergency_cleanup(self) -> dict:
+        """Экстренная очистка всей системы"""
         results = {
-            'records_deleted': self.cleanup_old_records(180),  # 6 месяцев
-            'exports_deleted': self.cleanup_old_exports(7),    # 1 неделя
-            'logs_deleted': self.cleanup_logs(30)              # 1 месяц
+            'total_deleted': 0,
+            'database_reset': False,
+            'files_deleted': 0
         }
-
-        self.logger.info(f"Очистка завершена: {results}")
+        
+        try:
+            # Полная очистка базы данных
+            results['total_deleted'] = self.db.clear_all_data()
+            results['database_reset'] = True
+            
+            # Удаление всех экспортов
+            exports_dir = "exports"
+            if os.path.exists(exports_dir):
+                import shutil
+                shutil.rmtree(exports_dir)
+                os.makedirs(exports_dir)
+                results['files_deleted'] += 1
+                
+            self.logger.info(f"Экстренная очистка завершена: {results}")
+            
+        except Exception as e:
+            self.logger.error(f"Ошибка экстренной очистки: {e}")
+            
         return results
 
-    def get_cleanup_info(self):
-        """Получить информацию о том, что можно почистить"""
-        try:
-            info = {
-                'old_records': 0,
-                'old_exports': 0,
-                'old_logs': 0,
-                'total_size_mb': 0
-            }
-
-            # Считаем старые записи
-            cutoff_date = datetime.now() - timedelta(days=180)
-            # Здесь нужно было бы сделать запрос к БД для подсчета
-
-            # Считаем старые экспорты
-            export_cutoff = datetime.now() - timedelta(days=7)
-            for filename in os.listdir('.'):
-                if filename.startswith('military_records_') and filename.endswith('.xlsx'):
-                    try:
-                        date_part = filename.replace('military_records_', '').replace('.xlsx', '')
-                        if len(date_part) >= 15:
-                            file_date = datetime.strptime(date_part[:15], '%Y%m%d_%H%M%S')
-                            if file_date < export_cutoff:
-                                info['old_exports'] += 1
-                                info['total_size_mb'] += os.path.getsize(filename) / (1024 * 1024)
-                    except:
-                        pass
-
-            # Считаем старые логи
-            log_cutoff = datetime.now() - timedelta(days=30)
-            for filename in os.listdir('.'):
-                if filename.endswith('.log'):
-                    try:
-                        file_stat = os.stat(filename)
-                        file_date = datetime.fromtimestamp(file_stat.st_mtime)
-                        if file_date < log_cutoff:
-                            info['old_logs'] += 1
-                            info['total_size_mb'] += os.path.getsize(filename) / (1024 * 1024)
-                    except:
-                        pass
-
-            info['total_size_mb'] = round(info['total_size_mb'], 2)
-            return info
-
-        except Exception as e:
-            self.logger.error(f"Ошибка получения информации для очистки: {e}")
-            return None
-
-# Запуск если вызван напрямую
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+# Функция для совместимости с существующим кодом
+def cleanup_system():
+    """Функция для совместимости"""
     cleaner = SystemCleaner()
+    return cleaner.full_cleanup()
 
-    # Показываем что можно почистить
-    info = cleaner.get_cleanup_info()
-    if info:
-        print("Информация для очистки:")
-        print(f"- Старых экспортов: {info['old_exports']}")
-        print(f"- Старых логов: {info['old_logs']}")
-        print(f"- Общий размер: {info['total_size_mb']} MB")
-
-        # Запускаем очистку
-        results = cleaner.full_cleanup()
-        print(f"\nРезультаты очистки: {results}")
-    else:
-        print("Ошибка получения информации для очистки")
+if __name__ == "__main__":
+    # Можно запустить очистку отдельно
+    cleaner = SystemCleaner()
+    results = cleaner.full_cleanup()
+    print(f"Результаты очистки: {results}")

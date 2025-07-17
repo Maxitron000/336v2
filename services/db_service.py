@@ -484,7 +484,7 @@ class DatabaseService:
             df['Время'] = df['Дата_Время'].dt.strftime('%H:%M:%S')
 
             # Выбираем нужные колонки в правильном порядке
-            df = df = df[['ФИО', 'Действие', 'Локация', 'Дата', 'Время']]
+            df = df[['ФИО', 'Действие', 'Локация', 'Дата', 'Время']]
 
             # Сохраняем в файл
             filename = f"military_records_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
@@ -665,6 +665,42 @@ class DatabaseService:
         """Альтернативный метод для полной очистки записей"""
         return self.clear_all_records()
 
+    def clear_all_data(self) -> int:
+        """Полная очистка всех данных системы"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                # Подсчитываем общее количество записей перед удалением
+                total_records = 0
+                
+                # Считаем записи в каждой таблице
+                cursor = conn.execute("SELECT COUNT(*) FROM records")
+                records_count = cursor.fetchone()[0]
+                total_records += records_count
+                
+                cursor = conn.execute("SELECT COUNT(*) FROM users")
+                users_count = cursor.fetchone()[0]
+                total_records += users_count
+                
+                cursor = conn.execute("SELECT COUNT(*) FROM admins")
+                admins_count = cursor.fetchone()[0]
+                total_records += admins_count
+
+                # Удаляем все данные из всех таблиц
+                conn.execute("DELETE FROM records")
+                conn.execute("DELETE FROM users")
+                conn.execute("DELETE FROM admins")
+
+                # Сбрасываем автоинкремент
+                conn.execute("DELETE FROM sqlite_sequence WHERE name IN ('records', 'users', 'admins')")
+
+                conn.commit()
+                logging.info(f"База данных полностью очищена. Удалено записей: {total_records}")
+                return total_records
+
+        except Exception as e:
+            logging.error(f"Ошибка при полной очистке БД: {e}")
+            return 0
+
     def full_database_reset(self):
         """Полная очистка базы данных"""
         try:
@@ -701,22 +737,41 @@ class DatabaseService:
             stats = {}
             with sqlite3.connect(self.db_path) as conn:
                 # Количество записей в таблицах
-                stats['users_count'] = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-                stats['records_count'] = conn.execute("SELECT COUNT(*) FROM records").fetchone()[0]
-                stats['admins_count'] = conn.execute("SELECT COUNT(*) FROM admins").fetchone()[0]
+                stats['users'] = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+                stats['records'] = conn.execute("SELECT COUNT(*) FROM records").fetchone()[0]
+                stats['admins'] = conn.execute("SELECT COUNT(*) FROM admins").fetchone()[0]
 
                 # Размер базы данных
                 import os
-                if os.path.exists('military_tracker.db'):
-                    stats['db_size_mb'] = os.path.getsize('military_tracker.db') / (1024 * 1024)
+                if os.path.exists(self.db_path):
+                    size_bytes = os.path.getsize(self.db_path)
+                    stats['size'] = f"{size_bytes / (1024 * 1024):.2f} МБ"
                 else:
-                    stats['db_size_mb'] = 0
+                    stats['size'] = "0 МБ"
+
+                # Последняя активность
+                try:
+                    cursor = conn.execute("SELECT MAX(timestamp) FROM records")
+                    last_activity = cursor.fetchone()[0]
+                    if last_activity:
+                        last_time = datetime.fromisoformat(last_activity.replace('Z', '+00:00'))
+                        stats['last_activity'] = last_time.strftime('%d.%m.%Y %H:%M')
+                    else:
+                        stats['last_activity'] = "Нет активности"
+                except:
+                    stats['last_activity'] = "Неизвестно"
 
             return stats
 
         except Exception as e:
             logging.error(f"Ошибка при получении статистики БД: {e}")
-            return {}
+            return {
+                'users': 0,
+                'records': 0, 
+                'admins': 0,
+                'size': '0 МБ',
+                'last_activity': 'Ошибка'
+            }
 
     def remove_admin(self, user_id: int) -> bool:
         """Удалить администратора"""
@@ -901,6 +956,10 @@ class DatabaseService:
 
     def export_to_csv(self, days: int = 30) -> Optional[str]:
         """Экспорт данных в CSV формат"""
+        if not EXPORT_AVAILABLE:
+            logging.error("❌ Библиотеки для экспорта недоступны")
+            return None
+            
         try:
             import os
 

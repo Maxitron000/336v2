@@ -719,7 +719,7 @@ async def callback_export_action(callback: CallbackQuery):
                 "Выберите временной интервал для экспорта данных:",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
                 parse_mode="Markdown"
-                                )
+            )
             await callback.answer()
             return
 
@@ -728,154 +728,39 @@ async def callback_export_action(callback: CallbackQuery):
             records = db.get_all_records(days=30, limit=10000)
             if records:
                 filename = db.export_to_csv(days=30)
-                period_text = "CSV экспорт за 30 дней"
-            else:
-                filename = None
-                period_text = "CSV экспорт за 30 дней"
-
-        elif export_type == "pdf":
-            # PDF Export logic
-            period_text = "PDF экспорт"
-            filename = None  # Placeholder
-            await callback.answer("❌ PDF экспорт в разработке", show_alert=True)
-            return
-
-        elif export_type == "reports":
-            # Reports logic
-            period_text = "Отчеты"
-            filename = None  # Placeholder
-            await callback.answer("❌ Отчеты в разработке", show_alert=True)
-            return
-
-        elif export_type in ["today", "yesterday", "week", "month"]:
-            filename = None
-            period_text = ""
-
-            if export_type == "today":
-                records = db.get_records_today()
-                if records:
-                    filename = db.export_records_to_excel(records, "сегодня")
-                    period_text = "сегодня"
-                else:
-                    await callback.message.edit_text(
-                        "❌ **Нет данных за сегодня**\n\n"
-                        "За сегодняшний день нет записей для экспорта.",
-                        reply_markup=get_back_keyboard("admin_export_menu"),
-                        parse_mode="Markdown"
-                    )
-                    await callback.answer("❌ Нет данных", show_alert=True)
-                    return
-
-            elif export_type == "yesterday":
-                records = db.get_records_yesterday()
-                if records:
-                    filename = db.export_records_to_excel(records, "вчера")
-                    period_text = "вчера"
-                else:
-                    await callback.message.edit_text(
-                        "❌ **Нет данных за вчера**\n\n"
-                        "За вчерашний день нет записей для экспорта.",
-                        reply_markup=get_back_keyboard("admin_export_menu"),
-                        parse_mode="Markdown"
-                    )
-                    await callback.answer("❌ Нет данных", show_alert=True)
-                    return
-
-            elif export_type == "week":
-                records = db.get_all_records(days=7)
-                if records:
-                    filename = db.export_records_to_excel(records, "последние 7 дней")
-                    period_text = "последние 7 дней"
-                else:
-                    await callback.message.edit_text(
-                        "❌ **Нет данных за последние 7 дней**\n\n",
-                        reply_markup=get_back_keyboard("admin_export_menu"),
-                        parse_mode="Markdown"
-                    )
-                    await callback.answer("❌ Нет данных", show_alert=True)
-                    return
-
-            elif export_type == "month":
-                records = db.get_all_records(days=30)
-                if records:
-                    filename = db.export_records_to_excel(records, "последние 30 дней")
-                    period_text = "последние 30 дней"
-                else:
-                    await callback.message.edit_text(
-                        "❌ **Нет данных за последние 30 дней**\n\n",
-                        reply_markup=get_back_keyboard("admin_export_menu"),
-                        parse_mode="Markdown"
-                    )
-                    await callback.answer("❌ Нет данных", show_alert=True)
-                    return
-
-        else:
-            await callback.answer("❌ Неизвестный тип экспорта", show_alert=True)
-            return
-
-        if filename:
-            try:
-                from aiogram.types import FSInputFile
-                import os
-
-                if os.path.exists(filename):
-                    # Проверяем размер файла
-                    file_size = os.path.getsize(filename)
-                    if file_size > 50 * 1024 * 1024:  # 50MB лимит Telegram
-                        await callback.message.edit_text(
-                            f"❌ **Файл слишком большой**\n\n"
-                            f"Размер файла: {file_size / (1024*1024):.1f} МБ\n"
-                            f"Максимальный размер: 50 МБ\n\n"
-                            f"Попробуйте экспортировать данные за меньший период.",
-                            reply_markup=get_back_keyboard("admin_export_menu"),
-                            parse_mode="Markdown"
-                        )
-                        try:
-                            os.remove(filename)
-                        except:
-                            pass
-                        return
-
-                    # Используем правильное имя файла для отправки
+                if filename:
+                    from aiogram.types import FSInputFile
+                    import os
+                    
                     document = FSInputFile(filename)
                     await callback.message.answer_document(
                         document,
-                        caption=f"📤 Экспорт: {period_text}\n📊 Размер файла: {file_size / 1024:.1f} КБ"
+                        caption="📊 CSV экспорт за последние 30 дней"
                     )
-
-                    # Удаляем временный файл после отправки
-                    try:
-                        os.remove(filename)
-                    except Exception as cleanup_error:
-                        logging.warning(f"Не удалось удалить временный файл: {cleanup_error}")
-
-                    # Обновляем сообщение
+                    os.remove(filename)
                     await callback.message.edit_text(
-                        f"✅ **Экспорт завершен**\n\n📤 Данные ({period_text}) успешно экспортированы и отправлены.",
+                        "✅ **CSV экспорт завершен**",
                         reply_markup=get_back_keyboard("admin_export_menu"),
                         parse_mode="Markdown"
                     )
                     await callback.answer("✅ Файл отправлен")
                 else:
-                    raise FileNotFoundError("Файл не найден после создания")
-            except Exception as send_error:
-                logging.error(f"Ошибка отправки файла: {send_error}")
-                await callback.message.edit_text(
-                    f"❌ **Ошибка отправки файла**\n\n"
-                    f"Файл создан, но не удалось его отправить: {str(send_error)}",
-                    reply_markup=get_back_keyboard("admin_export_menu"),
-                    parse_mode="Markdown"
-                )
-                await callback.answer("❌ Ошибка отправки", show_alert=True)
-                return
+                    await callback.answer("❌ Ошибка создания CSV", show_alert=True)
+            else:
+                await callback.answer("❌ Нет данных для экспорта", show_alert=True)
+            return
+
+        elif export_type == "pdf":
+            await callback.answer("❌ PDF экспорт в разработке", show_alert=True)
+            return
+
+        elif export_type == "reports":
+            await callback.answer("❌ Отчеты в разработке", show_alert=True)
+            return
+
         else:
-            await callback.message.edit_text(
-                f"❌ **Нет данных для экспорта**\n\n"
-                f"За период ({period_text}) нет записей для экспорта.",
-                reply_markup=get_back_keyboard("admin_export_menu"),
-                parse_mode="Markdown"
-            )
-            await callback.answer("❌ Нет данных для экспорта", show_alert=True)
+            await callback.answer("❌ Неизвестный тип экспорта", show_alert=True)
+            return
 
     except Exception as e:
         logging.error(f"Ошибка экспорта: {e}")
@@ -1458,6 +1343,33 @@ async def callback_admin_settings(callback: CallbackQuery):
     )
     await callback.answer()
 
+@router.callback_query(F.data == "settings_confirm_full_cleanup")
+async def callback_confirm_full_cleanup(callback: CallbackQuery):
+    """Подтверждение полной очистки"""
+    user_id = callback.from_user.id
+    if not await is_admin(user_id):
+        await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+        return
+
+    try:
+        # Выполняем полную очистку
+        deleted_count = db.clear_all_data()
+        text = f"🗑️ **Полная очистка завершена**\n\n"
+        text += f"Удалено записей: {deleted_count}\n"
+        text += f"ВСЕ данные системы были удалены.\n\n"
+        text += "⚠️ Система сброшена к начальному состоянию"
+
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_back_keyboard("admin_settings"),
+            parse_mode="Markdown"
+        )
+        await callback.answer("✅ Очистка выполнена", show_alert=True)
+
+    except Exception as e:
+        logging.error(f"Ошибка полной очистки: {e}")
+        await callback.answer("❌ Ошибка при очистке", show_alert=True)
+
 @router.callback_query(F.data.startswith("settings_"))
 async def callback_settings_action(callback: CallbackQuery):
     """Действия с настройками"""
@@ -1497,13 +1409,7 @@ async def callback_settings_action(callback: CallbackQuery):
             await callback.answer()
             return
 
-        elif action == "confirm" and "full" in callback.data:
-            # Подтверждение полной очистки
-            deleted_count = db.clear_all_data()
-            text = f"🗑️ **Полная очистка завершена**\n\n"
-            text += f"Удалено записей: {deleted_count}\n"
-            text += f"ВСЕ данные системы были удалены.\n\n"
-            text += "⚠️ Система сброшена к начальному состоянию"
+        
 
         elif action == "optimize":
             # Оптимизация базы данных
