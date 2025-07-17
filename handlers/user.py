@@ -761,8 +761,6 @@ async def handle_unknown_message(message: Message):
 
         # Проверяем частоту сообщений (защита от спама)
         if not can_user_make_action(user_id):
-            return  ```python
-# Игнорируем частые сообщения
             return
 
         update_user_last_action(user_id)
