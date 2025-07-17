@@ -421,9 +421,9 @@ class DatabaseService:
             # Создаем DataFrame
             df = pd.DataFrame(records)
 
-            # Форматируем данные - новые записи идут сверху
+            # Форматируем данные - новые записи идут снизу (хронологический порядок)
             df['timestamp'] = pd.to_datetime(df['timestamp'])
-            df = df.sort_values('timestamp', ascending=False)
+            df = df.sort_values('timestamp', ascending=True)
 
             # Переименовываем колонки
             df = df.rename(columns={
