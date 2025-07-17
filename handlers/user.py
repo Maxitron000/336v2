@@ -37,8 +37,27 @@ def get_main_menu_keyboard(is_admin: bool = False):
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_location_keyboard(action: str):
-    """Создать клавиатуру локаций с пагинацией"""
-    return get_location_keyboard_with_pagination(action, 1)
+    """Создать клавиатуру локаций"""
+    keyboard = []
+
+    # Показываем все локации
+    for i in range(0, len(LOCATIONS), 2):
+        row = []
+        for j in range(i, min(i + 2, len(LOCATIONS))):
+            location = LOCATIONS[j]
+            row.append(InlineKeyboardButton(
+                text=location,
+                callback_data=f"location_{action}_{location}"
+            ))
+        keyboard.append(row)
+
+    # Добавляем кнопку "Другое" только для убыли
+    if action == "убыл":
+        keyboard.append([InlineKeyboardButton(text="📝 Другое", callback_data=f"location_{action}_📝 Другое")])
+
+    # Добавляем кнопку "Назад"
+    keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")])
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_journal_keyboard():
     """Создать клавиатуру журнала"""
@@ -68,6 +87,7 @@ def get_location_keyboard_with_pagination(action: str, current_page: int = 1):
     if action == "убыл":
         keyboard.append([InlineKeyboardButton(text="📝 Другое", callback_data=f"location_{action}_📝 Другое")])
 
+    # Добавляем кнопку "Назад"
     keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
