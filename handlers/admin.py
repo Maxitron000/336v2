@@ -814,61 +814,61 @@ async def callback_export_action(callback: CallbackQuery):
             return
 
         if filename:
-                    try:
-                        from aiogram.types import FSInputFile
-                        import os
+            try:
+                from aiogram.types import FSInputFile
+                import os
 
-                        if os.path.exists(filename):
-                            # Проверяем размер файла
-                            file_size = os.path.getsize(filename)
-                            if file_size > 50 * 1024 * 1024:  # 50MB лимит Telegram
-                                await callback.message.edit_text(
-                                    f"❌ **Файл слишком большой**\n\n"
-                                    f"Размер файла: {file_size / (1024*1024):.1f} МБ\n"
-                                    f"Максимальный размер: 50 МБ\n\n"
-                                    f"Попробуйте экспортировать данные за меньший период.",
-                                    reply_markup=get_back_keyboard("admin_export_menu"),
-                                    parse_mode="Markdown"
-                                )
-                                try:
-                                    os.remove(filename)
-                                except:
-                                    pass
-                                return
-
-                            # Используем правильное имя файла для отправки
-                            document = FSInputFile(filename)
-                            await callback.message.answer_document(
-                                document,
-                                caption=f"📤 Экспорт: {period_text}\n📊 Размер файла: {file_size / 1024:.1f} КБ"
-                            )
-
-                            # Удаляем временный файл после отправки
-                            try:
-                                os.remove(filename)
-                            except Exception as cleanup_error:
-                                logging.warning(f"Не удалось удалить временный файл: {cleanup_error}")
-
-                            # Обновляем сообщение
-                            await callback.message.edit_text(
-                                f"✅ **Экспорт завершен**\n\n📤 Данные ({period_text}) успешно экспортированы и отправлены.",
-                                reply_markup=get_back_keyboard("admin_export_menu"),
-                                parse_mode="Markdown"
-                            )
-                            await callback.answer("✅ Файл отправлен")
-                        else:
-                            raise FileNotFoundError("Файл не найден после создания")
-                    except Exception as send_error:
-                        logging.error(f"Ошибка отправки файла: {send_error}")
+                if os.path.exists(filename):
+                    # Проверяем размер файла
+                    file_size = os.path.getsize(filename)
+                    if file_size > 50 * 1024 * 1024:  # 50MB лимит Telegram
                         await callback.message.edit_text(
-                            f"❌ **Ошибка отправки файла**\n\n"
-                            f"Файл создан, но не удалось его отправить: {str(send_error)}",
+                            f"❌ **Файл слишком большой**\n\n"
+                            f"Размер файла: {file_size / (1024*1024):.1f} МБ\n"
+                            f"Максимальный размер: 50 МБ\n\n"
+                            f"Попробуйте экспортировать данные за меньший период.",
                             reply_markup=get_back_keyboard("admin_export_menu"),
                             parse_mode="Markdown"
                         )
-                        await callback.answer("❌ Ошибка отправки", show_alert=True)
+                        try:
+                            os.remove(filename)
+                        except:
+                            pass
                         return
+
+                    # Используем правильное имя файла для отправки
+                    document = FSInputFile(filename)
+                    await callback.message.answer_document(
+                        document,
+                        caption=f"📤 Экспорт: {period_text}\n📊 Размер файла: {file_size / 1024:.1f} КБ"
+                    )
+
+                    # Удаляем временный файл после отправки
+                    try:
+                        os.remove(filename)
+                    except Exception as cleanup_error:
+                        logging.warning(f"Не удалось удалить временный файл: {cleanup_error}")
+
+                    # Обновляем сообщение
+                    await callback.message.edit_text(
+                        f"✅ **Экспорт завершен**\n\n📤 Данные ({period_text}) успешно экспортированы и отправлены.",
+                        reply_markup=get_back_keyboard("admin_export_menu"),
+                        parse_mode="Markdown"
+                    )
+                    await callback.answer("✅ Файл отправлен")
                 else:
+                    raise FileNotFoundError("Файл не найден после создания")
+            except Exception as send_error:
+                logging.error(f"Ошибка отправки файла: {send_error}")
+                await callback.message.edit_text(
+                    f"❌ **Ошибка отправки файла**\n\n"
+                    f"Файл создан, но не удалось его отправить: {str(send_error)}",
+                    reply_markup=get_back_keyboard("admin_export_menu"),
+                    parse_mode="Markdown"
+                )
+                await callback.answer("❌ Ошибка отправки", show_alert=True)
+                return
+        else:
             await callback.message.edit_text(
                 f"❌ **Нет данных для экспорта**\n\n"
                 f"За период ({period_text}) нет записей для экспорта.",
