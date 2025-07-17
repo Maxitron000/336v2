@@ -808,6 +808,53 @@ class DatabaseService:
             logging.error(f"Ошибка экспорта записей в Excel: {e}")
             return None
 
+    def create_empty_export_file(self, period_description: str = "") -> str:
+        """Создать пустой Excel файл для экспорта"""
+        try:
+            # Создаем DataFrame с заголовками
+            df = pd.DataFrame(columns=['ФИО', 'Действие', 'Локация', 'Дата', 'Время'])
+            
+            # Создаем имя файла с указанием периода
+            period_safe = period_description.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "-").replace(":", "")
+            filename = f"military_records_{period_safe}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+            # Создаем Excel файл
+            with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Записи', index=False)
+
+                # Получаем рабочий лист и стили
+                worksheet = writer.sheets['Записи']
+                from openpyxl.styles import PatternFill, Font, Alignment
+
+                # Определяем стили
+                header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+                header_font = Font(color="FFFFFF", bold=True, size=12)
+
+                # Форматируем заголовки
+                for cell in worksheet[1]:
+                    cell.fill = header_fill
+                    cell.font = header_font
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+
+                # Устанавливаем ширину колонок
+                worksheet.column_dimensions['A'].width = 20  # ФИО
+                worksheet.column_dimensions['B'].width = 12  # Действие
+                worksheet.column_dimensions['C'].width = 15  # Локация
+                worksheet.column_dimensions['D'].width = 12  # Дата
+                worksheet.column_dimensions['E'].width = 10  # Время
+
+                # Добавляем информационную строку
+                if period_description:
+                    worksheet.insert_rows(1)
+                    title_cell = worksheet.cell(row=1, column=1, value=f"Отчет {period_description} - нет данных")
+                    title_cell.font = Font(bold=True, size=14)
+                    worksheet.merge_cells('A1:E1')
+
+            return filename
+        except Exception as e:
+            logging.error(f"Ошибка создания пустого файла экспорта: {e}")
+            return None
+
     def export_to_csv(self, days: int = 30) -> Optional[str]:
         """Экспорт данных в CSV формат"""
         try:

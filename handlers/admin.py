@@ -722,6 +722,13 @@ async def callback_export_period(callback: CallbackQuery):
     try:
         from datetime import datetime, timedelta
         
+        # Сначала показываем сообщение о начале экспорта
+        await callback.message.edit_text(
+            "🔄 **Подготовка экспорта...**\n\n"
+            "Пожалуйста, подождите, идет обработка данных.",
+            parse_mode="Markdown"
+        )
+        
         if period == "today":
             # Экспорт за сегодня
             today = datetime.now().date()
@@ -736,41 +743,40 @@ async def callback_export_period(callback: CallbackQuery):
             
         elif period == "week":
             # Экспорт за неделю
-            filename = db.export_to_excel(days=7)
+            records = db.get_all_records(days=7, limit=1000)
             period_text = "за последние 7 дней"
             
         elif period == "month":
             # Экспорт за месяц
-            filename = db.export_to_excel(days=30)
+            records = db.get_all_records(days=30, limit=1000)
             period_text = "за последние 30 дней"
         else:
             await callback.answer("❌ Неизвестный период", show_alert=True)
             return
 
-        # Для сегодня и вчера создаем специальный экспорт
-        if period in ["today", "yesterday"]:
-            if not records:
-                await callback.message.edit_text(
-                    f"📅 **Экспорт {period_text}**\n\n"
-                    "❌ Нет записей за выбранный период.",
-                    reply_markup=get_back_keyboard("admin_export_menu"),
-                    parse_mode="Markdown"
-                )
-                await callback.answer()
-                return
-            
-            # Создаем временный Excel файл для выбранного дня
+        # Создаем файл экспорта
+        if records:
             filename = db.export_records_to_excel(records, period_text)
+        else:
+            # Создаем пустой файл с информацией об отсутствии данных
+            filename = db.create_empty_export_file(period_text)
         
         if filename:
             from aiogram.types import FSInputFile
             import os
             
             if os.path.exists(filename):
+                # Отправляем файл
                 document = FSInputFile(filename, filename=f"military_records_{period}.xlsx")
+                
+                if records:
+                    caption_text = f"📤 Экспорт {period_text}\n📊 Записей: {len(records)}"
+                else:
+                    caption_text = f"📤 Экспорт {period_text}\n❌ Нет данных за выбранный период"
+                
                 await callback.message.answer_document(
                     document,
-                    caption=f"📤 Экспорт {period_text}"
+                    caption=caption_text
                 )
                 
                 # Удаляем временный файл после отправки
@@ -779,20 +785,43 @@ async def callback_export_period(callback: CallbackQuery):
                 except:
                     pass
                     
+                # Обновляем сообщение
+                if records:
+                    result_text = f"✅ **Экспорт завершен**\n\n📤 Данные {period_text} успешно экспортированы и отправлены.\n📊 Обработано записей: {len(records)}"
+                else:
+                    result_text = f"✅ **Экспорт завершен**\n\n📤 Файл {period_text} создан.\n❌ За этот период нет записей о движении персонала."
+                
                 await callback.message.edit_text(
-                    f"✅ **Экспорт завершен**\n\n"
-                    f"📤 Данные {period_text} успешно экспортированы и отправлены.",
+                    result_text,
                     reply_markup=get_back_keyboard("admin_export_menu"),
                     parse_mode="Markdown"
                 )
                 await callback.answer("✅ Файл отправлен")
             else:
+                await callback.message.edit_text(
+                    "❌ **Ошибка создания файла**\n\n"
+                    "Не удалось создать Excel файл.",
+                    reply_markup=get_back_keyboard("admin_export_menu"),
+                    parse_mode="Markdown"
+                )
                 await callback.answer("❌ Ошибка создания файла", show_alert=True)
         else:
-            await callback.answer("❌ Нет данных для экспорта", show_alert=True)
+            await callback.message.edit_text(
+                "❌ **Ошибка экспорта**\n\n"
+                "Не удалось подготовить данные для экспорта.",
+                reply_markup=get_back_keyboard("admin_export_menu"),
+                parse_mode="Markdown"
+            )
+            await callback.answer("❌ Ошибка при экспорте", show_alert=True)
 
     except Exception as e:
         logging.error(f"Ошибка экспорта периода: {e}")
+        await callback.message.edit_text(
+            f"❌ **Ошибка экспорта**\n\n"
+            f"Произошла ошибка: {str(e)}",
+            reply_markup=get_back_keyboard("admin_export_menu"),
+            parse_mode="Markdown"
+        )
         await callback.answer("❌ Ошибка при экспорте", show_alert=True)
 
 # Остальные функции (summary, manage, и т.д.) остаются без изменений
