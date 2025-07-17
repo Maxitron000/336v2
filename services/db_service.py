@@ -577,15 +577,43 @@ class DatabaseService:
 
     def get_records_today(self) -> List[Dict[str, Any]]:
         """Получить записи за сегодня"""
-        from datetime import datetime
-        today = datetime.now().date()
-        return self.get_records_by_date(str(today))
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                today = datetime.now().date()
+                cursor = conn.execute('''
+                    SELECT r.*, u.full_name 
+                    FROM records r
+                    JOIN users u ON r.user_id = u.id
+                    WHERE DATE(r.timestamp) = ?
+                    ORDER BY r.timestamp ASC
+                ''', (str(today),))
+                records = [dict(row) for row in cursor.fetchall()]
+                logging.info(f"Найдено записей за сегодня ({today}): {len(records)}")
+                return records
+        except Exception as e:
+            logging.error(f"Ошибка получения записей за сегодня: {e}")
+            return []
 
     def get_records_yesterday(self) -> List[Dict[str, Any]]:
         """Получить записи за вчера"""
-        from datetime import datetime, timedelta
-        yesterday = (datetime.now() - timedelta(days=1)).date()
-        return self.get_records_by_date(str(yesterday))
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                yesterday = (datetime.now() - timedelta(days=1)).date()
+                cursor = conn.execute('''
+                    SELECT r.*, u.full_name 
+                    FROM records r
+                    JOIN users u ON r.user_id = u.id
+                    WHERE DATE(r.timestamp) = ?
+                    ORDER BY r.timestamp ASC
+                ''', (str(yesterday),))
+                records = [dict(row) for row in cursor.fetchall()]
+                logging.info(f"Найдено записей за вчера ({yesterday}): {len(records)}")
+                return records
+        except Exception as e:
+            logging.error(f"Ошибка получения записей за вчера: {e}")
+            return []
 
     def cleanup_old_records(self, days: int = 180) -> int:
         """Очистка старых записей"""

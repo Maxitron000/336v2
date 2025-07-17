@@ -818,7 +818,8 @@ async def callback_export_period(callback: CallbackQuery):
         if period == "today":
             # Экспорт за сегодня
             records = db.get_records_today()
-            period_text = f"за сегодня ({datetime.now().strftime('%d.%m.%Y')})"
+            today = datetime.now().date()
+            period_text = f"за сегодня ({today.strftime('%d.%m.%Y')})"
             filename_period = "today"
 
         elif period == "yesterday":
@@ -853,7 +854,7 @@ async def callback_export_period(callback: CallbackQuery):
 
                 if os.path.exists(filename):
                     # Отправляем файл
-                    document = FSInputFile(filename, filename=f"military_records_{filename_period}.xlsx")
+                    document = FSInputFile(filename, filename=f"military_records_{filename_period}_{datetime.now().strftime('%Y%m%d')}.xlsx")
                     caption_text = f"📤 Экспорт {period_text}\n📊 Записей: {len(records)}"
 
                     await callback.message.answer_document(
@@ -902,7 +903,7 @@ async def callback_export_period(callback: CallbackQuery):
 
                 if os.path.exists(filename):
                     # Отправляем пустой файл
-                    document = FSInputFile(filename, filename=f"military_records_{filename_period}_empty.xlsx")
+                    document = FSInputFile(filename, filename=f"military_records_{filename_period}_empty_{datetime.now().strftime('%Y%m%d')}.xlsx")
                     caption_text = f"📤 Экспорт {period_text}\n❌ Нет данных за выбранный период"
 
                     await callback.message.answer_document(
