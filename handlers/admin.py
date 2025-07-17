@@ -723,8 +723,7 @@ async def callback_export_action(callback: CallbackQuery):
             await callback.answer()
             return
 
-        elif export```python
-_type == "csv":
+        elif export_type == "csv":
             # CSV Export logic
             records = db.get_all_records(days=30, limit=10000)
             if records:
