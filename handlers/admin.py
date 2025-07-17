@@ -113,28 +113,24 @@ def get_analytics_keyboard():
         [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_panel")]
     ])
 
-def get_export_keyboard():
-    """Клавиатура экспорта"""
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="📊 Excel (все данные)", callback_data="export_excel_all"),
-            InlineKeyboardButton(text="📋 Excel (фильтр)", callback_data="export_excel_filter")
-        ],
-        [
-            InlineKeyboardButton(text="📝 CSV экспорт", callback_data="export_csv"),
-            InlineKeyboardButton(text="📄 Отчет PDF", callback_data="export_pdf")
-        ],
-        [
-            InlineKeyboardButton(text="📧 Еженедельный отчет", callback_data="export_weekly"),
-            InlineKeyboardButton(text="📅 Месячный отчет", callback_data="export_monthly")
-        ],
-        [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_panel")]
-    ])
-
-def get_back_keyboard(callback_data: str = "admin_panel"):
-    """Создать кнопку назад"""
+def get_back_keyboard(callback_data: str) -> InlineKeyboardMarkup:
+    """Получить клавиатуру с кнопкой 'Назад'"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔙 Назад", callback_data=callback_data)]
+    ])
+
+def get_export_keyboard() -> InlineKeyboardMarkup:
+    """Получить клавиатуру для экспорта"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="📊 Excel", callback_data="export_excel"),
+            InlineKeyboardButton(text="📄 CSV", callback_data="export_csv")
+        ],
+        [
+            InlineKeyboardButton(text="📑 PDF", callback_data="export_pdf"),
+            InlineKeyboardButton(text="📈 Отчеты", callback_data="export_reports")
+        ],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_panel")]
     ])
 
 async def is_admin(user_id: int) -> bool:
@@ -691,7 +687,7 @@ async def callback_export_action(callback: CallbackQuery):
     # Проверяем доступность экспорта
     if not EXPORT_AVAILABLE:
         await callback.message.edit_text(
-            "❌ **Ошибка системы экспорта**\n\n"
+            "❌ **Библиотеки для экспорта недоступны**\n\n"
             "Не удалось загрузить необходимые библиотеки для экспорта.\n"
             "Обратитесь к администратору системы.",
             reply_markup=get_back_keyboard("admin_export_menu"),
@@ -700,30 +696,20 @@ async def callback_export_action(callback: CallbackQuery):
         await callback.answer("❌ Экспорт недоступен", show_alert=True)
         return
 
-    export_type = callback.data.replace("export_", "")
+    export_type = callback.data.split("_")[-1]
 
     try:
-        # Показываем сообщение о начале экспорта
-        await callback.message.edit_text(
-            "🔄 **Подготовка экспорта...**\n\n"
-            "Пожалуйста, подождите, идет обработка данных.",
-            parse_mode="Markdown"
-        )
+        await callback.message.edit_text("⏳ Подготовка экспорта...", parse_mode="Markdown")
 
-        if export_type == "excel_all":
-            records = db.get_all_records(days=365, limit=10000)
-            filename = db.export_records_to_excel(records, "все данные за год") if records else db.create_empty_export_file("все данные")
-            period_text = "все данные"
-        elif export_type == "excel_filter":
-            # Показываем меню выбора периода
+        if export_type == "excel":
             keyboard = [
                 [
-                    InlineKeyboardButton(text="📅 Сегодня", callback_data="export_period_today"),
-                    InlineKeyboardButton(text="📅 Вчера", callback_data="export_period_yesterday")
+                    InlineKeyboardButton(text="📅 Сегодня", callback_data="export_excel_today"),
+                    InlineKeyboardButton(text="📅 Вчера", callback_data="export_excel_yesterday")
                 ],
                 [
-                    InlineKeyboardButton(text="📅 Последние 7 дней", callback_data="export_period_week"),
-                    InlineKeyboardButton(text="📅 Последние 30 дней", callback_data="export_period_month")
+                    InlineKeyboardButton(text="📅 Последние 7 дней", callback_data="export_excel_week"),
+                    InlineKeyboardButton(text="📅 Последние 30 дней", callback_data="export_excel_month")
                 ],
                 [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_export_menu")]
             ]
@@ -733,50 +719,94 @@ async def callback_export_action(callback: CallbackQuery):
                 "Выберите временной интервал для экспорта данных:",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
                 parse_mode="Markdown"
-            )
+                        )
             await callback.answer()
             return
+
         elif export_type == "csv":
+            # CSV Export logic
             records = db.get_all_records(days=30, limit=10000)
             filename = db.export_to_csv(days=30) if records else None
             period_text = "CSV экспорт за 30 дней"
-        elif export_type == "pdf":
-            keyboard = [
-                [
-                    InlineKeyboardButton(text="📅 Сегодня", callback_data="export_pdf_today"),
-                    InlineKeyboardButton(text="📅 Вчера", callback_data="export_pdf_yesterday")
-                ],
-                [
-                    InlineKeyboardButton(text="📅 Последние 7 дней", callback_data="export_pdf_week"),
-                    InlineKeyboardButton(text="📅 Последние 30 дней", callback_data="export_pdf_month")
-                ],
-                [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_export_menu")]
-            ]
 
-            await callback.message.edit_text(
-                "📅 **Выберите период для PDF экспорта:**\n\n"
-                "Выберите временной интервал для PDF экспорта данных:",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
-                parse_mode="Markdown"
-            )
-            await callback.answer()
+        elif export_type == "pdf":
+            # PDF Export logic
+            period_text = "PDF экспорт"
+            filename = None  # Placeholder
+            await callback.answer("❌ PDF экспорт в разработке", show_alert=True)
             return
-        elif export_type == "weekly":
-            records = db.get_all_records(days=7, limit=1000)
-            filename = db.export_records_to_excel(records, "последние 7 дней") if records else db.create_empty_export_file("последние 7 дней")
-            period_text = "еженедельный отчет"
-        elif export_type == "monthly":
-            records = db.get_all_records(days=30, limit=1000)
-            filename = db.export_records_to_excel(records, "последние 30 дней") if records else db.create_empty_export_file("последние 30 дней")
-            period_text = "месячный отчет"
+
+        elif export_type == "reports":
+            # Reports logic
+            period_text = "Отчеты"
+            filename = None  # Placeholder
+            await callback.answer("❌ Отчеты в разработке", show_alert=True)
+            return
+
+        elif export_type in ["today", "yesterday", "week", "month"]:
+            filename = None
+            period_text = ""
+
+            if export_type == "today":
+                records = db.get_records_today()
+                if records:
+                    filename = db.export_records_to_excel(records, "сегодня")
+                    period_text = "сегодня"
+                else:
+                    await callback.message.edit_text(
+                        "❌ **Нет данных за сегодня**\n\n"
+                        "За сегодняшний день нет записей для экспорта.",
+                        reply_markup=get_back_keyboard("admin_export_menu"),
+                        parse_mode="Markdown"
+                    )
+                    await callback.answer("❌ Нет данных", show_alert=True)
+                    return
+
+            elif export_type == "yesterday":
+                records = db.get_records_yesterday()
+                if records:
+                    filename = db.export_records_to_excel(records, "вчера")
+                    period_text = "вчера"
+                else:
+                    await callback.message.edit_text(
+                        "❌ **Нет данных за вчера**\n\n"
+                        "За вчерашний день нет записей для экспорта.",
+                        reply_markup=get_back_keyboard("admin_export_menu"),
+                        parse_mode="Markdown"
+                    )
+                    await callback.answer("❌ Нет данных", show_alert=True)
+                    return
+
+            elif export_type == "week":
+                records = db.get_all_records(days=7)
+                if records:
+                    filename = db.export_records_to_excel(records, "последние 7 дней")
+                    period_text = "последние 7 дней"
+                else:
+                    await callback.message.edit_text(
+                        "❌ **Нет данных за последние 7 дней**\n\n",
+                        reply_markup=get_back_keyboard("admin_export_menu"),
+                        parse_mode="Markdown"
+                    )
+                    await callback.answer("❌ Нет данных", show_alert=True)
+                    return
+
+            elif export_type == "month":
+                records = db.get_all_records(days=30)
+                if records:
+                    filename = db.export_records_to_excel(records, "последние 30 дней")
+                    period_text = "последние 30 дней"
+                else:
+                    await callback.message.edit_text(
+                        "❌ **Нет данных за последние 30 дней**\n\n",
+                        reply_markup=get_back_keyboard("admin_export_menu"),
+                        parse_mode="Markdown"
+                    )
+                    await callback.answer("❌ Нет данных", show_alert=True)
+                    return
+
         else:
-            await callback.message.edit_text(
-                "⚙️ **Функция в разработке**\n\n"
-                "Эта функция будет доступна в следующих обновлениях.",
-                reply_markup=get_back_keyboard("admin_export_menu"),
-                parse_mode="Markdown"
-            )
-            await callback.answer()
+            await callback.answer("❌ Неизвестный тип экспорта", show_alert=True)
             return
 
         if filename:
@@ -857,9 +887,9 @@ async def callback_export_action(callback: CallbackQuery):
         )
         await callback.answer("❌ Ошибка экспорта", show_alert=True)
 
-@router.callback_query(F.data.startswith("export_period_"))
-async def callback_export_period(callback: CallbackQuery):
-    """Экспорт данных за выбранный период"""
+@router.callback_query(F.data.startswith("export_excel_"))
+async def callback_export_excel_period(callback: CallbackQuery):
+    """Экспорт Excel данных за выбранный период"""
     user_id = callback.from_user.id
     if not await is_admin(user_id):
         await callback.answer("❌ У вас нет прав администратора", show_alert=True)

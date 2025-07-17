@@ -448,7 +448,7 @@ class DatabaseService:
         if not EXPORT_AVAILABLE:
             logging.error("❌ Библиотеки для экспорта недоступны")
             return None
-            
+
         try:
             records = self.get_all_records(days=days, limit=10000)
 
@@ -728,6 +728,10 @@ class DatabaseService:
 
     def export_records_to_excel(self, records: List[Dict[str, Any]], period_description: str = "") -> Optional[str]:
         """Экспорт конкретных записей в Excel"""
+        if not EXPORT_AVAILABLE:
+            logging.error("❌ Библиотеки для экспорта недоступны")
+            return None
+
         try:
             logging.info(f"Начинаем экспорт {len(records) if records else 0} записей для периода: {period_description}")
 
@@ -784,7 +788,6 @@ class DatabaseService:
                 # Определяем стили
                 header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
                 header_font = Font(color="FFFFFF", bold=True, size=12)
-
                 arrived_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")  # Светло-зеленый
                 departed_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")  # Светло-красный
 
