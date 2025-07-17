@@ -232,6 +232,15 @@ async def cmd_stats(message: Message):
         text += f"✅ В части: {current_status['present']}\n"
         text += f"❌ Вне части: {current_status['absent']}\n\n"
         
+        if current_status.get('present_list'):
+            text += "🟢 **Присутствующие:**\n"
+            for person in current_status['present_list'][:10]:  # Показываем максимум 10
+                text += f"• {person['name']} - {person['location']}\n"
+            
+            if len(current_status['present_list']) > 10:
+                text += f"... и еще {len(current_status['present_list']) - 10}\n"
+            text += "\n"
+        
         if current_status['absent_list']:
             text += "🔴 **Отсутствующие:**\n"
             for person in current_status['absent_list'][:10]:  # Показываем максимум 10
@@ -240,7 +249,8 @@ async def cmd_stats(message: Message):
             if len(current_status['absent_list']) > 10:
                 text += f"... и еще {len(current_status['absent_list']) - 10}"
         else:
-            text += "✅ Все бойцы в части!"
+            if not current_status.get('present_list'):
+                text += "✅ Все бойцы в части!"
         
         keyboard = [
             [InlineKeyboardButton(text="📈 Подробная статистика", callback_data="admin_stats")],

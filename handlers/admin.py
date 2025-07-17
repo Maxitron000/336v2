@@ -80,12 +80,19 @@ async def callback_admin_summary(callback: CallbackQuery):
         text += f"✅ В части: {stats['present']}\n"
         text += f"❌ Вне части: {stats['absent']}\n\n"
 
+        if stats.get('present_list'):
+            text += "🟢 Присутствующие:\n"
+            for person in stats['present_list']:
+                text += f"• {person['name']} - {person['location']}\n"
+            text += "\n"
+
         if stats['absent_list']:
             text += "🔴 Отсутствующие:\n"
             for person in stats['absent_list']:
                 text += f"• {person['name']} - {person['location']}\n"
         else:
-            text += "✅ Все бойцы в части!"
+            if not stats.get('present_list'):
+                text += "✅ Все бойцы в части!"
 
         await callback.message.edit_text(
             text,

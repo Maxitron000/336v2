@@ -315,7 +315,7 @@ class DatabaseService:
 
                 # Получаем последние действия каждого пользователя
                 absent_list = []
-                present_count = 0
+                present_list = []
 
                 for user in all_users:
                     last_record_cursor = conn.execute('''
@@ -333,13 +333,19 @@ class DatabaseService:
                             'location': last_record['location']
                         })
                     else:
-                        present_count += 1
+                        # Если последнее действие "прибыл" или записей нет (считаем присутствующим)
+                        location = last_record['location'] if last_record else 'В части'
+                        present_list.append({
+                            'name': user['full_name'],
+                            'location': location
+                        })
 
                 return {
                     'total': len(all_users),
-                    'present': present_count,
+                    'present': len(present_list),
                     'absent': len(absent_list),
-                    'absent_list': absent_list
+                    'absent_list': absent_list,
+                    'present_list': present_list
                 }
         except Exception as e:
             logging.error(f"Ошибка получения статуса: {e}")
