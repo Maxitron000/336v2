@@ -806,8 +806,7 @@ class DatabaseService:
         """Альтернативный метод удаления администратора"""
         return self.remove_admin(user_id)
 
-```python
-    def export_records_to_excel(self, records: list, period_description: str = "") -> str:
+def export_records_to_excel(self, records: list, period_description: str = "") -> str:
         """Экспорт записей в Excel файл с улучшенным форматированием"""
         try:
             import os
