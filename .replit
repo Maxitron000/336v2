@@ -34,7 +34,7 @@ args = "python web_interface.py"
 [[workflows.workflow]]
 name = "Run Bot Fixed"
 author = 44716284
-mode = "sequential"
+mode = "parallel"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
