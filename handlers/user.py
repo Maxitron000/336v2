@@ -1,11 +1,12 @@
 import re
 import asyncio
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardRemove
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from services.db_service import DatabaseService
+from utils.validators import validate_full_name, suggest_full_name_correction, normalize_full_name
 from config import MAIN_ADMIN_ID, LOCATIONS
 from datetime import datetime
 import logging
@@ -137,17 +138,21 @@ async def handle_name_input(message: Message, state: FSMContext):
             return
 
         # Валидация формата ФИО
-        if not re.match(r'^[А-ЯЁ][а-яё]+ [А-ЯЁ]\.[А-ЯЁ]\.$', full_name):
-            await message.answer(
-                "❌ Неверный формат ФИО!\n\n"
-                "Правильный формат: Фамилия И.О.\n"
-                "Пример: Иванов И.И.\n\n"
-                "Требования:\n"
-                "• Фамилия с большой буквы\n"
-                "• Пробел\n"
-                "• Инициалы через точку\n\n"
-                "Попробуйте еще раз:"
-            )
+        if not validate_full_name(full_name):
+            correction_suggestion = suggest_full_name_correction(full_name)
+            error_message = "❌ Неверный формат ФИО!\n\n" \
+                            "Правильный формат: Фамилия И.О.\n" \
+                            "Пример: Иванов И.И.\n\n" \
+                            "Требования:\n" \
+                            "• Фамилия с большой буквы\n" \
+                            "• Пробел\n" \
+                            "• Инициалы через точку\n\n"
+
+            if correction_suggestion:
+                error_message += f"Возможно, вы имели в виду: {correction_suggestion}\n\n"
+
+            error_message += "Попробуйте еще раз:"
+            await message.answer(error_message)
             return
 
         # Проверка на уже существующего пользователя
@@ -165,13 +170,15 @@ async def handle_name_input(message: Message, state: FSMContext):
             )
             return
 
+        normalized_full_name = normalize_full_name(full_name)
+
         # Сохраняем пользователя
-        if db.add_user(user_id, username, full_name):
+        if db.add_user(user_id, username, normalized_full_name):
             await state.clear()
             is_admin = db.is_admin(user_id) or user_id == MAIN_ADMIN_ID
             await message.answer(
                 f"✅ Регистрация успешно завершена!\n"
-                f"👤 Добро пожаловать, {full_name}!"
+                f"👤 Добро пожаловать, {normalized_full_name}!"
             )
             await message.answer(
                 "🎖️ Электронный табель выхода в город\n\nВыберите действие:",
