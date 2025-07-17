@@ -110,7 +110,7 @@ async def callback_admin_journal(callback: CallbackQuery):
             for record in records:
                 timestamp = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
                 formatted_time = timestamp.strftime('%d.%m %H:%M')
-                action_emoji = "🚶" if record['action'] == "убыл" else "🏠"
+                action_emoji = "🔴" if record['action'] == "убыл" else "🟢"
                 text += f"👤 {record['full_name']}\n"
                 text += f"{action_emoji} {record['action']} - {record['location']}\n"
                 text += f"⏰ {formatted_time}\n\n"

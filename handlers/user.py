@@ -23,8 +23,8 @@ def get_main_menu_keyboard(is_admin: bool = False):
     """Создать главное меню"""
     keyboard = [
         [
-            InlineKeyboardButton(text="🚶 Убыл", callback_data="action_leave"),
-            InlineKeyboardButton(text="🏠 Прибыл", callback_data="action_arrive")
+            InlineKeyboardButton(text="❌ Убыл", callback_data="action_leave"),
+            InlineKeyboardButton(text="✅ Прибыл", callback_data="action_arrive")
         ],
         [InlineKeyboardButton(text="📋 Мой журнал", callback_data="show_journal")]
     ]
@@ -239,7 +239,7 @@ async def callback_show_journal(callback: CallbackQuery):
         for record in records:
             timestamp = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
             formatted_time = timestamp.strftime('%d.%m %H:%M')
-            action_emoji = "🚶" if record['action'] == "убыл" else "🏠"
+            action_emoji = "🔴" if record['action'] == "убыл" else "🟢"
             text += f"{action_emoji} {record['action']} - {record['location']}\n"
             text += f"⏰ {formatted_time}\n\n"
 
