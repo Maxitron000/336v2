@@ -316,7 +316,7 @@ class DatabaseService:
                 # Получаем последние действия каждого пользователя
                 absent_users = []
                 present_users = []
-                
+
                 # Группировка по локациям
                 location_groups = {}
 
@@ -336,20 +336,20 @@ class DatabaseService:
                             'name': user['full_name'],
                             'location': location
                         })
-                        
+
                         # Группируем отсутствующих по локациям
                         if location not in location_groups:
                             location_groups[location] = {'count': 0, 'names': []}
                         location_groups[location]['count'] += 1
                         location_groups[location]['names'].append(user['full_name'])
-                        
+
                     else:
                         # Если последнее действие "в части" или записей нет - считаем в части
                         present_users.append({
                             'name': user['full_name'],
                             'location': 'В части'
                         })
-                        
+
                         # Группируем присутствующих
                         if 'В части' not in location_groups:
                             location_groups['В части'] = {'count': 0, 'names': []}
@@ -585,3 +585,68 @@ class DatabaseService:
         except Exception as e:
             logging.error(f"Ошибка очистки записей: {e}")
             return 0
+
+    def clear_all_records(self) -> int:
+        """Удалить все записи из системы"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute("DELETE FROM records")
+                deleted_count = cursor.rowcount
+                conn.commit()
+                return deleted_count
+        except Exception as e:
+            logging.error(f"Ошибка при очистке всех записей: {e}")
+            return 0
+
+    def full_database_reset(self):
+        """Полная очистка базы данных"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                # Удаляем все данные из всех таблиц
+                conn.execute("DELETE FROM records")
+                conn.execute("DELETE FROM users")
+                conn.execute("DELETE FROM admins")
+
+                # Сбрасываем автоинкремент
+                conn.execute("DELETE FROM sqlite_sequence WHERE name IN ('records', 'users', 'admins')")
+
+                conn.commit()
+                logging.info("База данных полностью очищена")
+
+        except Exception as e:
+            logging.error(f"Ошибка при полной очистке БД: {e}")
+            raise
+
+    def optimize_database(self):
+        """Оптимизация базы данных"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("VACUUM")
+                conn.execute("ANALYZE")
+                conn.commit()
+                logging.info("База данных оптимизирована")
+        except Exception as e:
+            logging.error(f"Ошибка при оптимизации БД: {e}")
+
+    def get_database_stats(self) -> dict:
+        """Получить статистику базы данных"""
+        try:
+            stats = {}
+            with sqlite3.connect(self.db_path) as conn:
+                # Количество записей в таблицах
+                stats['users_count'] = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+                stats['records_count'] = conn.execute("SELECT COUNT(*) FROM records").fetchone()[0]
+                stats['admins_count'] = conn.execute("SELECT COUNT(*) FROM admins").fetchone()[0]
+
+                # Размер базы данных
+                import os
+                if os.path.exists('military_tracker.db'):
+                    stats['db_size_mb'] = os.path.getsize('military_tracker.db') / (1024 * 1024)
+                else:
+                    stats['db_size_mb'] = 0
+
+            return stats
+
+        except Exception as e:
+            logging.error(f"Ошибка при получении статистики БД: {e}")
+            return {}

@@ -1,4 +1,3 @@
-
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
@@ -259,7 +258,7 @@ async def callback_filter_journal(callback: CallbackQuery):
         return
 
     filter_type = callback.data.split("_")[-1]
-    
+
     try:
         if filter_type in ["1", "7", "30"]:
             days = int(filter_type)
@@ -349,7 +348,7 @@ async def callback_personnel_action(callback: CallbackQuery):
         return
 
     action = callback.data.split("_")[-1]
-    
+
     try:
         if action == "all":
             users = db.get_all_users()
@@ -420,18 +419,18 @@ async def callback_analytics_action(callback: CallbackQuery):
         return
 
     action = callback.data.split("_")[-1]
-    
+
     try:
         if action == "general":
             # Общая статистика
             records = db.get_all_records(days=30)
             users = db.get_all_users()
             status = db.get_current_status()
-            
+
             total_actions = len(records)
             departures = len([r for r in records if r['action'] == 'не в части'])
             arrivals = len([r for r in records if r['action'] == 'в части'])
-            
+
             text = "📊 **Общая статистика за 30 дней**\n\n"
             text += f"👥 Всего бойцов: {len(users)}\n"
             text += f"✅ В части: {status.get('present', 0)}\n"
@@ -453,7 +452,7 @@ async def callback_analytics_action(callback: CallbackQuery):
                 if record['action'] == 'не в части':
                     loc = record['location']
                     locations[loc] = locations.get(loc, 0) + 1
-            
+
             text = "📍 **Статистика по локациям (30 дней)**\n\n"
             if locations:
                 sorted_locations = sorted(locations.items(), key=lambda x: x[1], reverse=True)
@@ -471,14 +470,14 @@ async def callback_analytics_action(callback: CallbackQuery):
             for record in records:
                 name = record['full_name']
                 soldier_activity[name] = soldier_activity.get(name, 0) + 1
-            
+
             text = "👤 **Активность бойцов (30 дней)**\n\n"
             if soldier_activity:
                 sorted_soldiers = sorted(soldier_activity.items(), key=lambda x: x[1], reverse=True)
                 text += "🏆 **Самые активные:**\n"
                 for i, (name, count) in enumerate(sorted_soldiers[:10], 1):
                     text += f"{i}. {name}: {count} записей\n"
-                    
+
                 text += f"\n📊 **Статистика:**\n"
                 text += f"• Средняя активность: {sum(soldier_activity.values()) / len(soldier_activity):.1f}\n"
                 text += f"• Максимальная: {max(soldier_activity.values())}\n"
@@ -529,7 +528,7 @@ async def callback_export_action(callback: CallbackQuery):
         return
 
     export_type = callback.data.split("_")[-1]
-    
+
     try:
         if export_type == "all":
             filename = db.export_to_excel(days=365)  # Все данные за год
@@ -551,7 +550,7 @@ async def callback_export_action(callback: CallbackQuery):
             await callback.answer("✅ Файл отправлен")
         else:
             await callback.answer("❌ Нет данных для экспорта", show_alert=True)
-            
+
     except Exception as e:
         logging.error(f"Ошибка экспорта: {e}")
         await callback.answer("❌ Ошибка при экспорте", show_alert=True)
@@ -576,7 +575,7 @@ async def callback_admin_summary(callback: CallbackQuery):
 
         if stats.get('location_groups'):
             text += "📍 **Группировка по локациям:**\n\n"
-            
+
             if 'В части' in stats['location_groups']:
                 group = stats['location_groups']['В части']
                 text += f"🟢 **В части: {group['count']}**\n"
@@ -585,7 +584,7 @@ async def callback_admin_summary(callback: CallbackQuery):
                 if len(group['names']) > 10:
                     text += f"... и еще {len(group['names']) - 10}\n"
                 text += "\n"
-            
+
             for location, group in stats['location_groups'].items():
                 if location != 'В части':
                     text += f"🔴 **{location}: {group['count']}**\n"
@@ -594,7 +593,7 @@ async def callback_admin_summary(callback: CallbackQuery):
                     if len(group['names']) > 5:
                         text += f"... и еще {len(group['names']) - 5}\n"
                     text += "\n"
-        
+
         if stats['total'] == 0:
             text += "ℹ️ Нет зарегистрированных бойцов"
 
@@ -735,3 +734,6 @@ async def cmd_admin(message: Message):
         reply_markup=get_admin_panel_keyboard(is_main_admin),
         parse_mode="Markdown"
     )
+
+def get_notifications_keyboard():
+    """Клавиатура настроек уведомлений"""
