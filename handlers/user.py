@@ -632,13 +632,27 @@ async def cmd_journal(message: Message, state: FSMContext):
         if latest_records:
             last_record = latest_records[0]  # Берем первую (самую новую)
             if last_record['action'] == 'не в части':
-                current_status = "🔴 **Убыл (не в части)**"
+                current_status = "🔴 **Не в части**"
+                status_desc = "Отсутствует"
             else:
-                current_status = "🟢 **Прибыл (в части)**"
+                current_status = "🟢 **В части**"
+                status_desc = "Присутствует"
+
+            last_time = datetime.fromisoformat(last_record['timestamp'].replace('Z', '+00:00'))
+            time_ago = (datetime.now() - last_time.replace(tzinfo=None)).total_seconds()
+
+            if time_ago < 3600:  # Меньше часа
+                time_text = f"{int(time_ago / 60)} мин. назад"
+            elif time_ago < 86400:  # Меньше дня
+                time_text = f"{int(time_ago / 3600)} ч. назад"
+            else:
+                time_text = f"{int(time_ago / 86400)} дн. назад"
 
             text += f"\n━━━━━━━━━━━━━━━\n"
-            text += f"📊 Текущий статус: {current_status}\n"
-            text += f"📍 Последняя локация: {last_record['location']}"
+            text += f"📊 **Текущий статус:** {current_status}\n"
+            text += f"🏷️ **Описание:** {status_desc}\n"
+            text += f"📍 **Локация:** {last_record['location']}\n"
+            text += f"⏱️ **Обновлено:** {time_text}"
 
         # Кнопка возврата в главное меню
         keyboard = [[InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")]]
@@ -712,13 +726,28 @@ async def callback_show_journal(callback: CallbackQuery):
         if latest_records:
             last_record = latest_records[0]  # Берем первую (самую новую)
             if last_record['action'] == 'не в части':
-                current_status = "🔴 **Убыл (не в части)**"
+                current_status = "🔴 **Не в части**"
+                status_desc = "Отсутствует"
             else:
-                current_status = "🟢 **Прибыл (в части)**"
+                current_status = "🟢 **В части**"
+                status_desc = "Присутствует"
+
+            last_time = datetime.fromisoformat(last_record['timestamp'].replace('Z', '+00:00'))
+            time_ago = (datetime.now() - last_time.replace(tzinfo=None)).total_seconds()
+
+            if time_ago < 3600:  # Меньше часа
+                time_text = f"{int(time_ago / 60)} мин. назад"
+            elif time_ago < 86400:  # Меньше дня
+                time_text = f"{int(time_ago / 3600)} ч. назад"
+            else:
+                time_text = f"{int(time_ago / 86400)} дн. назад"
 
             text += f"\n━━━━━━━━━━━━━━━\n"
-            text += f"📊 Текущий статус: {current_status}\n"
-            text += f"📍 Последняя локация: {last_record['location']}"
+            text += f"📊 **Текущий статус:** {current_status}\n"
+            text += f"🏷️ **Описание:** {status_desc}\n"
+            text += f"📍 **Локация:** {last_record['location']}\n"
+```python
+            text += f"⏱️ **Обновлено:** {time_text}"
 
         # Кнопка возврата в главное меню
         keyboard = [[InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")]]
@@ -800,7 +829,7 @@ user_message_count = {}  # Счетчик сообщений за период
 def can_user_make_action(user_id: int, action_type: str = "general") -> bool:
     """Проверяет, может ли пользователь сделать новое действие (защита от спама)"""
     now = datetime.now()
-    
+
     # Разные интервалы для разных типов действий
     intervals = {
         "general": 2,      # Общие действия - 2 секунды
@@ -808,31 +837,31 @@ def can_user_make_action(user_id: int, action_type: str = "general") -> bool:
         "message": 1,      # Сообщения - 1 секунда
         "callback": 2      # Callback запросы - 2 секунды
     }
-    
+
     min_interval = intervals.get(action_type, 2)
-    
+
     if user_id in user_last_action:
         last_action_time = user_last_action[user_id]
         if (now - last_action_time).total_seconds() < min_interval:
             return False
-    
+
     # Проверяем количество сообщений за последнюю минуту
     if action_type == "message":
         if user_id not in user_message_count:
             user_message_count[user_id] = []
-        
+
         # Очищаем старые записи (старше 1 минуты)
         user_message_count[user_id] = [
             msg_time for msg_time in user_message_count[user_id]
             if (now - msg_time).total_seconds() < 60
         ]
-        
+
         # Проверяем лимит (максимум 10 сообщений в минуту)
         if len(user_message_count[user_id]) >= 10:
             return False
-        
+
         user_message_count[user_id].append(now)
-    
+
     return True
 
 def update_user_last_action(user_id: int):

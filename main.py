@@ -251,6 +251,9 @@ async def main():
         print(f"  ⚠️ Файл БД будет создан: {DB_NAME}")
 
     try:
+        # Настраиваем логирование для подавления INFO сообщений
+        logging.getLogger("root").setLevel(logging.WARNING)
+        
         # Инициализируем БД только один раз
         db = DatabaseService()
         print("  ✅ Подключение к БД: OK")

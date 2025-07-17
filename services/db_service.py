@@ -156,18 +156,24 @@ class DatabaseService:
             action = action.strip()
             location = location.strip()
 
-            # Проверяем последнее действие пользователя (защита от дублирования)
+            # Улучшенная защита от дублирования записей
             last_records = self.get_user_records(user_id, 1)
             if last_records:
                 last_record = last_records[0]  # Первая запись (самая новая)
                 last_action = last_record['action']
                 last_timestamp = datetime.fromisoformat(last_record['timestamp'].replace('Z', '+00:00'))
                 
-                # Проверяем, было ли такое же действие в последние 5 секунд
+                # Проверяем, было ли такое же действие в последние 10 секунд (увеличили время)
                 time_diff = (datetime.now() - last_timestamp.replace(tzinfo=None)).total_seconds()
                 
-                if last_action == action and time_diff < 5:
-                    logging.warning(f"Дублирование действия '{action}' заблокировано для пользователя {user_id}")
+                # Строгая проверка на дублирование одинаковых действий
+                if last_action == action and time_diff < 10:
+                    logging.warning(f"Дублирование действия '{action}' заблокировано для пользователя {user_id} (разница: {time_diff:.1f}с)")
+                    return False
+                
+                # Дополнительная проверка: нельзя делать одно и то же действие с одной локацией
+                if last_action == action and last_record['location'] == location and time_diff < 60:
+                    logging.warning(f"Дублирование записи '{action}' в '{location}' заблокировано для пользователя {user_id}")
                     return False
 
             with sqlite3.connect(self.db_path) as conn:
