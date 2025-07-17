@@ -258,6 +258,9 @@ async def handle_custom_location(message: Message, state: FSMContext):
                 "🎖️ Электронный табель выхода в город\n\nВыберите действие:",
                 reply_markup=get_main_menu_keyboard(is_admin)
             )
+
+            # Уведомляем главного админа ПОСЛЕ главного меню
+            await send_admin_notification(message.bot, user_id, action, custom_location)
         else:
             await message.answer("❌ Ошибка при добавлении записи. Попробуйте позже.")
     except Exception as e:
@@ -451,20 +454,30 @@ async def callback_location_selection(callback: CallbackQuery, state: FSMContext
         # Добавляем запись
         if db.add_record(user_id, action, location):
             status_text = "не в части" if action == "не в части" else "в части"
-            await callback.message.edit_text(
+            
+            # Отправляем сообщение о статусе
+            await callback.message.answer(
                 f"✅ Статус обновлен!\n"
                 f"📍 Статус: {status_text}\n"
                 f"🏠 Локация: {location}\n"
                 f"⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
             )
 
-            # Показываем главное меню через 2 секунды
-            await asyncio.sleep(2)
+            # Показываем главное меню сразу внизу
             is_admin = db.is_admin(user_id) or user_id == MAIN_ADMIN_ID
-            await callback.message.edit_text(
+            await callback.message.answer(
                 "🎖️ Электронный табель выхода в город\n\nВыберите действие:",
                 reply_markup=get_main_menu_keyboard(is_admin)
             )
+
+            # Уведомляем главного админа ПОСЛЕ главного меню
+            await send_admin_notification(callback.message.bot, user_id, action, location)
+
+            # Удаляем старое сообщение с кнопками
+            try:
+                await callback.message.delete()
+            except:
+                pass
         else:
             await callback.message.edit_text("❌ Ошибка при добавлении записи. Попробуйте позже.")
 
