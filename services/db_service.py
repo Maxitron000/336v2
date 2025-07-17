@@ -421,7 +421,7 @@ class DatabaseService:
             # Создаем DataFrame
             df = pd.DataFrame(records)
 
-            # Форматируем данные
+            # Форматируем данные - новые записи идут сверху
             df['timestamp'] = pd.to_datetime(df['timestamp'])
             df = df.sort_values('timestamp', ascending=False)
 
@@ -484,10 +484,10 @@ class DatabaseService:
                         cell.alignment = Alignment(horizontal='left', vertical='center')
 
                         # Применяем цветовую заливку в зависимости от действия
-                        if action_cell.value == "прибыл":
-                            cell.fill = arrived_fill
-                        elif action_cell.value == "убыл":
-                            cell.fill = departed_fill
+                        if action_cell.value in ["в части", "прибыл"]:
+                            cell.fill = arrived_fill  # Зеленый для прибытия
+                        elif action_cell.value in ["не в части", "убыл"]:
+                            cell.fill = departed_fill  # Красный для убытия
 
                 # Автоматически подгоняем ширину колонок
                 column_widths = {

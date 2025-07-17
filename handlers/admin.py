@@ -150,12 +150,16 @@ async def show_admin_journal(callback: CallbackQuery):
                     text += "─" * 25 + "\n\n"
 
         keyboard = [
-            [InlineKeyboardButton("📊 Статистика", callback_data="admin_journal_stats")],
-            [InlineKeyboardButton("📤 Экспорт Excel", callback_data="admin_journal_export")],
-            [InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]
+            [InlineKeyboardButton(text="📊 Статистика", callback_data="admin_journal_stats")],
+            [InlineKeyboardButton(text="📤 Экспорт Excel", callback_data="admin_journal_export")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_panel")]
         ]
 
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        reply_markup = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📊 Статистика", callback_data="admin_journal_stats")],
+            [InlineKeyboardButton(text="📤 Экспорт Excel", callback_data="admin_journal_export")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_panel")]
+        ])
         await callback.message.edit_text(text, reply_markup=reply_markup, parse_mode="Markdown")
         await callback.answer()
 

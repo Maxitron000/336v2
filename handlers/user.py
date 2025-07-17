@@ -566,7 +566,7 @@ async def callback_show_journal(callback: CallbackQuery):
                 "📝 У вас пока нет записей в журнале.\n"
                 "Сделайте первую отметку о прибытии или убытии!",
                 parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")]])
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")]])
             )
             await callback.answer()
             return
@@ -618,7 +618,7 @@ async def callback_show_journal(callback: CallbackQuery):
         logging.error(f"Ошибка в callback_show_journal: {e}")
         await callback.message.edit_text(
             "❌ Ошибка при загрузке журнала.\nПопробуйте позже.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")]])
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")]])
         )
         await callback.answer()
 
@@ -757,5 +757,5 @@ async def handle_unknown_message(message: Message):
                 "ℹ️ Используйте кнопки меню для навигации.\n"
                 "Для возврата к главному меню отправьте /start"
             )
-    except Exception as e:
+    except Exception as e:```python
         logging.error(f"Ошибка в handle_unknown_message: {e}")
