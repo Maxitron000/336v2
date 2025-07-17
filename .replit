@@ -10,7 +10,7 @@ channel = "stable-24_05"
 packages = ["glibcLocales"]
 
 [workflows]
-runButton = "Run Bot"
+runButton = "Run Web Interface"
 
 [[workflows.workflow]]
 name = "Run Bot"
