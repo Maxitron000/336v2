@@ -731,8 +731,7 @@ async def callback_admin_remove(callback: CallbackQuery):
         admins = db.get_all_admins()
         regular_admins = [admin for admin in admins if admin['id'] != MAIN_ADMIN_ID]
 
-        if```python
- not regular_admins:
+        if not regular_admins:
             await callback.message.edit_text(
                 "❌ Нет администраторов для удаления.\n"
                 "Главный администратор не может быть удален.",
