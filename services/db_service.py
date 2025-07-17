@@ -339,6 +339,23 @@ class DatabaseService:
             logging.error(f"Ошибка экспорта в Excel: {e}")
             return None
 
+    def get_records_by_date(self, date_str: str) -> List[Dict[str, Any]]:
+        """Получить записи за конкретную дату"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute('''
+                    SELECT r.*, u.full_name 
+                    FROM records r
+                    JOIN users u ON r.user_id = u.id
+                    WHERE DATE(r.timestamp) = ?
+                    ORDER BY r.timestamp DESC
+                ''', (date_str,))
+                return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            logging.error(f"Ошибка получения записей по дате: {e}")
+            return []
+
     def cleanup_old_records(self, days: int = 180) -> int:
         """Очистка старых записей"""
         try:
