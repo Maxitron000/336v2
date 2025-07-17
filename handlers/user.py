@@ -746,7 +746,6 @@ async def callback_show_journal(callback: CallbackQuery):
             text += f"📊 **Текущий статус:** {current_status}\n"
             text += f"🏷️ **Описание:** {status_desc}\n"
             text += f"📍 **Локация:** {last_record['location']}\n"
-```python
             text += f"⏱️ **Обновлено:** {time_text}"
 
         # Кнопка возврата в главное меню
@@ -1017,3 +1016,73 @@ async def callback_arrived(callback: CallbackQuery, state: FSMContext):
         await callback.answer("❌ Ошибка при сохранении записи", show_alert=True)
 
     await callback.answer()
+def get_journal_keyboard_with_pagination(page: int, total_pages: int):
+    """Создать клавиатуру журнала с пагинацией"""
+    keyboard = []
+    
+    # Кнопки пагинации
+    if total_pages > 1:
+        pagination_row = []
+        
+        if page > 1:
+            pagination_row.append(InlineKeyboardButton(text="⬅️", callback_data=f"journal_page_{page-1}"))
+        
+        pagination_row.append(InlineKeyboardButton(text=f"{page}/{total_pages}", callback_data="journal_info"))
+        
+        if page < total_pages:
+            pagination_row.append(InlineKeyboardButton(text="➡️", callback_data=f"journal_page_{page+1}"))
+        
+        keyboard.append(pagination_row)
+    
+    # Кнопка назад
+    keyboard.append([InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+def get_location_keyboard_with_pagination(action: str, page: int):
+    """Создать клавиатуру локаций с пагинацией"""
+    from config import LOCATIONS
+    
+    per_page = 6
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    
+    locations_to_show = [loc for loc in LOCATIONS if loc != "📝 Другое"]
+    page_locations = locations_to_show[start_idx:end_idx]
+    
+    keyboard = []
+    
+    # Добавляем локации по 2 в ряд
+    for i in range(0, len(page_locations), 2):
+        row = []
+        for j in range(i, min(i + 2, len(page_locations))):
+            location = page_locations[j]
+            row.append(InlineKeyboardButton(
+                text=location,
+                callback_data=f"location_{action}_{location}"
+            ))
+        keyboard.append(row)
+    
+    # Пагинация
+    total_pages = (len(locations_to_show) + per_page - 1) // per_page
+    if total_pages > 1:
+        pagination_row = []
+        
+        if page > 1:
+            pagination_row.append(InlineKeyboardButton(text="⬅️", callback_data=f"locations_page_{action}_{page-1}"))
+        
+        pagination_row.append(InlineKeyboardButton(text=f"{page}/{total_pages}", callback_data="locations_info"))
+        
+        if page < total_pages:
+            pagination_row.append(InlineKeyboardButton(text="➡️", callback_data=f"locations_page_{action}_{page+1}"))
+        
+        keyboard.append(pagination_row)
+    
+    # Добавляем кнопку "Другое" только для убыли
+    if action == "убыл":
+        keyboard.append([InlineKeyboardButton(text="📝 Другое", callback_data=f"location_{action}_📝 Другое")])
+    
+    # Кнопка назад
+    keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
