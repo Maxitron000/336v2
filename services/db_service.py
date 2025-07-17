@@ -159,11 +159,15 @@ class DatabaseService:
             # Проверяем последнее действие пользователя (защита от дублирования)
             last_records = self.get_user_records(user_id, 1)
             if last_records:
-                # Получаем последнюю запись (самую новую) - первая в списке, так как ORDER BY timestamp DESC
-                last_record = last_records[0]  # Первая запись в списке (самая новая)
+                last_record = last_records[0]  # Первая запись (самая новая)
                 last_action = last_record['action']
-                if last_action == action:
-                    logging.warning(f"Попытка дублирования действия '{action}' пользователем {user_id}")
+                last_timestamp = datetime.fromisoformat(last_record['timestamp'].replace('Z', '+00:00'))
+                
+                # Проверяем, было ли такое же действие в последние 5 секунд
+                time_diff = (datetime.now() - last_timestamp.replace(tzinfo=None)).total_seconds()
+                
+                if last_action == action and time_diff < 5:
+                    logging.warning(f"Дублирование действия '{action}' заблокировано для пользователя {user_id}")
                     return False
 
             with sqlite3.connect(self.db_path) as conn:

@@ -345,12 +345,13 @@ async def callback_action_selection(callback: CallbackQuery, state: FSMContext):
         user_id = callback.from_user.id
 
         # Защита от спама
-        if not can_user_make_action(user_id, "record"):
+        if not can_user_make_action(user_id, "callback"):
             await callback.answer("⚠️ Слишком частые действия! Подождите несколько секунд.", show_alert=True)
             return
 
         # Проверяем, зарегистрирован ли пользователь
-        if not db.get_user(user_id):
+        user = db.get_user(user_id)
+        if not user:
             await callback.message.edit_text(
                 "❌ Вы не зарегистрированы в системе!\n"
                 "Отправьте команду /start для регистрации."
@@ -391,6 +392,11 @@ async def callback_action_selection(callback: CallbackQuery, state: FSMContext):
             action = "в части"
             location = "Часть"
 
+            # Дополнительная проверка перед добавлением записи
+            if not can_user_make_action(user_id, "record"):
+                await callback.answer("⚠️ Слишком частые попытки! Подождите.", show_alert=True)
+                return
+
             # Добавляем запись
             result = db.add_record(user_id, action, location)
             if result:
@@ -420,8 +426,8 @@ async def callback_action_selection(callback: CallbackQuery, state: FSMContext):
                 # Показываем ошибку с возможностью вернуться
                 keyboard = [[InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")]]
                 await callback.message.edit_text(
-                    "❌ Не удалось обновить статус.\n"
-                    "Возможно, вы уже отмечены как присутствующий.",
+                    "❌ Статус уже обновлен или произошла ошибка.\n"
+                    "Проверьте ваш журнал для подтверждения.",
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
                 )
         else:
@@ -798,9 +804,9 @@ def can_user_make_action(user_id: int, action_type: str = "general") -> bool:
     # Разные интервалы для разных типов действий
     intervals = {
         "general": 2,      # Общие действия - 2 секунды
-        "record": 5,       # Добавление записей - 5 секунд
+        "record": 3,       # Добавление записей - 3 секунды
         "message": 1,      # Сообщения - 1 секунда
-        "callback": 1      # Callback запросы - 1 секунда
+        "callback": 2      # Callback запросы - 2 секунды
     }
     
     min_interval = intervals.get(action_type, 2)
