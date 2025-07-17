@@ -517,7 +517,10 @@ class DatabaseService:
                 for cell in worksheet[1]:
                     cell.fill = header_fill
                     cell.font = header_font
-                    cell.alignment = Alignment(horizontal='center', vertical='center')
+                    try:
+                        cell.alignment = Alignment(horizontal='center', vertical='center')
+                    except Exception as e:
+                        logging.warning(f"Could not set cell alignment: {e}")
                     cell.border = border
 
                 # Форматируем данные с цветовой заливкой
