@@ -126,7 +126,7 @@ async def handle_name_input(message: Message, state: FSMContext):
                 "Введите ваше ФИО в формате: Фамилия И.О.\n"
                 "Пример: Иванов И.И."
             )
-            returnwait message.answer(
+            return await message.answer(
                 "❌ ФИО должно содержать от 3 до 50 символов!\n\n"
                 f"Введено: {len(full_name)} символов\n"
                 "Попробуйте еще раз:"
