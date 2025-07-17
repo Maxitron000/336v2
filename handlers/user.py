@@ -72,33 +72,44 @@ def get_journal_keyboard():
 @router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext):
     """Обработчик команды /start"""
-    from aiogram.types import ReplyKeyboardRemove
+    try:
+        from aiogram.types import ReplyKeyboardRemove
 
-    user = message.from_user
-    user_id = user.id
-    username = user.username or f"user_{user_id}"
+        user = message.from_user
+        user_id = user.id
+        username = user.username or f"user_{user_id}"
 
-    # Проверяем, зарегистрирован ли пользователь
-    existing_user = db.get_user(user_id)
+        # Проверяем, зарегистрирован ли пользователь
+        existing_user = db.get_user(user_id)
 
-    if not existing_user:
-        # Запрашиваем ФИО
-        await state.set_state(UserStates.waiting_for_name)
+        if not existing_user:
+            # Запрашиваем ФИО
+            await state.set_state(UserStates.waiting_for_name)
+            await message.answer(
+                "🎖️ Добро пожаловать в систему электронного табеля!\n\n"
+                "Для регистрации введите ваше ФИО в формате:\n"
+                "Фамилия И.О.\n\n"
+                "Пример: Иванов И.И.",
+                reply_markup=ReplyKeyboardRemove()
+            )
+            return
+
+        # Пользователь уже зарегистрирован
+        is_admin = db.is_admin(user_id) or user_id == MAIN_ADMIN_ID
         await message.answer(
-            "🎖️ Добро пожаловать в систему электронного табеля!\n\n"
-            "Для регистрации введите ваше ФИО в формате:\n"
-            "Фамилия И.О.\n\n"
-            "Пример: Иванов И.И.",
-            reply_markup=ReplyKeyboardRemove()
+            "🎖️ Электронный табель выхода в город\n\nВыберите действие:",
+            reply_markup=get_main_menu_keyboard(is_admin)
         )
-        return
-
-    # Пользователь уже зарегистрирован
-    is_admin = db.is_admin(user_id) or user_id == MAIN_ADMIN_ID
-    await message.answer(
-        "🎖️ Электронный табель выхода в город\n\nВыберите действие:",
-        reply_markup=get_main_menu_keyboard(is_admin)
-    )
+    except Exception as e:
+        logging.error(f"Критическая ошибка в cmd_start для пользователя {user_id}: {e}")
+        await state.clear()
+        try:
+            await message.answer(
+                "❌ Произошла ошибка при запуске системы.\n"
+                "Попробуйте позже или обратитесь к администратору."
+            )
+        except Exception as send_error:
+            logging.error(f"Не удалось отправить сообщение об ошибке: {send_error}")
 
 @router.message(StateFilter(UserStates.waiting_for_name))
 async def handle_name_input(message: Message, state: FSMContext):
@@ -107,7 +118,14 @@ async def handle_name_input(message: Message, state: FSMContext):
         user = message.from_user
         user_id = user.id
         username = user.username or f"user_{user_id}"
+
+        # Защита от спама при регистрации
+        if not can_user_make_action(user_id, "message"):
+            await message.answer("⚠️ Слишком частые попытки регистрации! Подождите немного.")
+            return
+
         full_name = message.text.strip() if message.text else ""
+        update_user_last_action(user_id)
 
         # Проверка на пустое сообщение
         if not full_name:
@@ -326,6 +344,11 @@ async def callback_action_selection(callback: CallbackQuery, state: FSMContext):
     try:
         user_id = callback.from_user.id
 
+        # Защита от спама
+        if not can_user_make_action(user_id, "record"):
+            await callback.answer("⚠️ Слишком частые действия! Подождите несколько секунд.", show_alert=True)
+            return
+
         # Проверяем, зарегистрирован ли пользователь
         if not db.get_user(user_id):
             await callback.message.edit_text(
@@ -334,6 +357,8 @@ async def callback_action_selection(callback: CallbackQuery, state: FSMContext):
             )
             await callback.answer()
             return
+
+        update_user_last_action(user_id)
 
         if "arrive" in callback.data:
             # Проверяем последнее действие пользователя
@@ -369,7 +394,7 @@ async def callback_action_selection(callback: CallbackQuery, state: FSMContext):
             # Добавляем запись
             result = db.add_record(user_id, action, location)
             if result:
-                # Отправляем сообщение о статусе
+                # Отправляем новое сообщение о статусе
                 await callback.message.answer(
                     f"✅ Статус обновлен!\n"
                     f"📍 Вы в части\n"
@@ -389,8 +414,8 @@ async def callback_action_selection(callback: CallbackQuery, state: FSMContext):
                 # Удаляем старое сообщение с кнопками
                 try:
                     await callback.message.delete()
-                except:
-                    pass
+                except Exception as del_error:
+                    logging.warning(f"Не удалось удалить сообщение: {del_error}")
             else:
                 # Показываем ошибку с возможностью вернуться
                 keyboard = [[InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")]]
@@ -444,6 +469,13 @@ async def callback_action_selection(callback: CallbackQuery, state: FSMContext):
 async def callback_location_selection(callback: CallbackQuery, state: FSMContext):
     """Обработка выбора локации"""
     try:
+        user_id = callback.from_user.id
+
+        # Защита от спама
+        if not can_user_make_action(user_id, "record"):
+            await callback.answer("⚠️ Слишком частые действия! Подождите несколько секунд.", show_alert=True)
+            return
+
         parts = callback.data.split("_", 2)
         if len(parts) < 3:
             await callback.message.edit_text("❌ Некорректные данные.")
@@ -452,7 +484,8 @@ async def callback_location_selection(callback: CallbackQuery, state: FSMContext
 
         action = parts[1]
         location = parts[2]
-        user_id = callback.from_user.id
+
+        update_user_last_action(user_id)
 
         # Проверяем, зарегистрирован ли пользователь
         if not db.get_user(user_id):
@@ -756,14 +789,44 @@ async def show_user_journal_page(callback: CallbackQuery, user_id: int, page: in
 
 # Словарь для отслеживания последних действий пользователей
 user_last_action = {}
+user_message_count = {}  # Счетчик сообщений за период
 
-def can_user_make_action(user_id: int) -> bool:
+def can_user_make_action(user_id: int, action_type: str = "general") -> bool:
     """Проверяет, может ли пользователь сделать новое действие (защита от спама)"""
     now = datetime.now()
+    
+    # Разные интервалы для разных типов действий
+    intervals = {
+        "general": 2,      # Общие действия - 2 секунды
+        "record": 5,       # Добавление записей - 5 секунд
+        "message": 1,      # Сообщения - 1 секунда
+        "callback": 1      # Callback запросы - 1 секунда
+    }
+    
+    min_interval = intervals.get(action_type, 2)
+    
     if user_id in user_last_action:
         last_action_time = user_last_action[user_id]
-        if (now - last_action_time).total_seconds() < 3:  # Минимум 3 секунды между действиями
+        if (now - last_action_time).total_seconds() < min_interval:
             return False
+    
+    # Проверяем количество сообщений за последнюю минуту
+    if action_type == "message":
+        if user_id not in user_message_count:
+            user_message_count[user_id] = []
+        
+        # Очищаем старые записи (старше 1 минуты)
+        user_message_count[user_id] = [
+            msg_time for msg_time in user_message_count[user_id]
+            if (now - msg_time).total_seconds() < 60
+        ]
+        
+        # Проверяем лимит (максимум 10 сообщений в минуту)
+        if len(user_message_count[user_id]) >= 10:
+            return False
+        
+        user_message_count[user_id].append(now)
+    
     return True
 
 def update_user_last_action(user_id: int):
@@ -813,8 +876,10 @@ async def handle_unknown_message(message: Message):
     try:
         user_id = message.from_user.id
 
-        # Проверяем частоту сообщений (защита от спама)
-        if not can_user_make_action(user_id):
+        # Усиленная защита от спама для неизвестных сообщений
+        if not can_user_make_action(user_id, "message"):
+            # Не отвечаем на спам, просто игнорируем
+            logging.warning(f"Спам от пользователя {user_id}: {message.text[:50] if message.text else 'no text'}")
             return
 
         update_user_last_action(user_id)
@@ -832,7 +897,7 @@ async def handle_unknown_message(message: Message):
                 "Для возврата к главному меню отправьте /start"
             )
     except Exception as e:
-        logging.error(f"Ошибка в handle_unknown_message: {e}")
+        logging.error(f"Ошибка в handle_unknown_message от пользователя {user_id}: {e}")
 
 async def send_admin_notification(bot, user_id: int, action: str, location: str):
     """Отправляет уведомление главному админу о действиях пользователя."""
