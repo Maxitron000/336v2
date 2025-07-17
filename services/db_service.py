@@ -55,6 +55,22 @@ class DatabaseService:
     def add_user(self, user_id: int, username: str, full_name: str) -> bool:
         """Добавить пользователя"""
         try:
+            # Валидация входных данных
+            if not isinstance(user_id, int) or user_id <= 0:
+                logging.error(f"Некорректный user_id: {user_id}")
+                return False
+            
+            if not username or len(username.strip()) == 0:
+                logging.error("Пустое имя пользователя")
+                return False
+            
+            if not full_name or len(full_name.strip()) < 5 or len(full_name.strip()) > 50:
+                logging.error(f"Некорректное ФИО: {full_name}")
+                return False
+            
+            username = username.strip()[:50]  # Ограничиваем длину
+            full_name = full_name.strip()
+            
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute(
                     'INSERT OR REPLACE INTO users (id, username, full_name) VALUES (?, ?, ?)',
@@ -84,6 +100,27 @@ class DatabaseService:
     def add_record(self, user_id: int, action: str, location: str) -> bool:
         """Добавить запись"""
         try:
+            # Валидация входных данных
+            if not isinstance(user_id, int) or user_id <= 0:
+                logging.error(f"Некорректный user_id: {user_id}")
+                return False
+            
+            if not action or action.strip() not in ['в части', 'не в части', 'прибыл', 'убыл']:
+                logging.error(f"Некорректное действие: {action}")
+                return False
+            
+            if not location or len(location.strip()) < 2 or len(location.strip()) > 100:
+                logging.error(f"Некорректная локация: {location}")
+                return False
+            
+            # Проверяем, существует ли пользователь
+            if not self.get_user(user_id):
+                logging.error(f"Пользователь {user_id} не найден")
+                return False
+            
+            action = action.strip()
+            location = location.strip()
+            
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute(
                     'INSERT INTO records (user_id, action, location) VALUES (?, ?, ?)',
