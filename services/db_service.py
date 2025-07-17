@@ -661,3 +661,137 @@ class DatabaseService:
         except Exception as e:
             logging.error(f"Ошибка при удалении администратора: {e}")
             return False
+
+    def delete_admin(self, user_id: int) -> bool:
+        """Альтернативный метод удаления администратора"""
+        return self.remove_admin(user_id)
+
+    def export_records_to_excel(self, records: List[Dict[str, Any]], period_description: str = "") -> Optional[str]:
+        """Экспорт конкретных записей в Excel"""
+        try:
+            if not records:
+                return None
+
+            # Создаем DataFrame
+            df = pd.DataFrame(records)
+
+            # Форматируем данные - новые записи идут снизу (хронологический порядок)
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df = df.sort_values('timestamp', ascending=True)
+
+            # Преобразуем действия для корректного отображения
+            df['action'] = df['action'].replace({
+                'в части': 'прибыл',
+                'не в части': 'убыл'
+            })
+
+            # Переименовываем колонки
+            df = df.rename(columns={
+                'full_name': 'ФИО',
+                'action': 'Действие',
+                'location': 'Локация',
+                'timestamp': 'Дата_Время'
+            })
+
+            # Убираем эмодзи из локаций
+            df['Локация'] = df['Локация'].str.replace(r'[^\w\s\-\.\,\(\)]', '', regex=True).str.strip()
+
+            # Создаем отдельные столбцы для даты и времени
+            df['Дата'] = df['Дата_Время'].dt.strftime('%d.%m.%Y')
+            df['Время'] = df['Дата_Время'].dt.strftime('%H:%M:%S')
+
+            # Выбираем нужные колонки в правильном порядке
+            df = df[['ФИО', 'Действие', 'Локация', 'Дата', 'Время']]
+
+            # Создаем имя файла с указанием периода
+            period_safe = period_description.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "-").replace(":", "")
+            filename = f"military_records_{period_safe}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+            # Создаем Excel файл с улучшенным форматированием
+            with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Записи', index=False)
+
+                # Получаем рабочий лист и стили
+                worksheet = writer.sheets['Записи']
+                from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+
+                # Определяем стили
+                header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+                header_font = Font(color="FFFFFF", bold=True, size=12)
+
+                arrived_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")  # Светло-зеленый
+                departed_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")  # Светло-красный
+
+                border = Border(
+                    left=Side(style='thin'),
+                    right=Side(style='thin'),
+                    top=Side(style='thin'),
+                    bottom=Side(style='thin')
+                )
+
+                # Форматируем заголовки
+                for cell in worksheet[1]:
+                    cell.fill = header_fill
+                    cell.font = header_font
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+                    cell.border = border
+
+                # Форматируем данные с цветовой заливкой
+                for row_num, row in enumerate(worksheet.iter_rows(min_row=2), start=2):
+                    action_cell = row[1]  # Колонка "Действие"
+
+                    # Применяем цветовую заливку в зависимости от действия
+                    if action_cell.value == "прибыл":
+                        for cell in row:
+                            cell.fill = arrived_fill
+                    elif action_cell.value == "убыл":
+                        for cell in row:
+                            cell.fill = departed_fill
+
+                    # Добавляем границы
+                    for cell in row:
+                        cell.border = border
+
+                # Автоматически подгоняем ширину колонок
+                column_widths = {
+                    'A': 0,  # ФИО
+                    'B': 0,  # Действие  
+                    'C': 0,  # Локация
+                    'D': 0,  # Дата
+                    'E': 0   # Время
+                }
+
+                # Определяем максимальную ширину для каждой колонки
+                for row in worksheet.iter_rows():
+                    for cell in row:
+                        column_letter = cell.column_letter
+                        if column_letter in column_widths:
+                            try:
+                                cell_length = len(str(cell.value)) if cell.value else 0
+                                if cell_length > column_widths[column_letter]:
+                                    column_widths[column_letter] = cell_length
+                            except:
+                                pass
+
+                # Устанавливаем ширину колонок с особыми настройками
+                worksheet.column_dimensions['A'].width = max(column_widths['A'] + 3, 20)  # ФИО - минимум 20
+                worksheet.column_dimensions['B'].width = max(column_widths['B'] + 2, 12)  # Действие - минимум 12
+                worksheet.column_dimensions['C'].width = max(column_widths['C'] + 2, 15)  # Локация - минимум 15
+                worksheet.column_dimensions['D'].width = 12  # Дата - фиксированная ширина
+                worksheet.column_dimensions['E'].width = 10  # Время - фиксированная ширина
+
+                # Устанавливаем высоту строк
+                for row in worksheet.iter_rows():
+                    worksheet.row_dimensions[row[0].row].height = 20
+
+                # Добавляем заголовок с информацией о периоде
+                if period_description:
+                    worksheet.insert_rows(1)
+                    title_cell = worksheet.cell(row=1, column=1, value=f"Отчет {period_description}")
+                    title_cell.font = Font(bold=True, size=14)
+                    worksheet.merge_cells('A1:E1')
+
+            return filename
+        except Exception as e:
+            logging.error(f"Ошибка экспорта записей в Excel: {e}")
+            return None

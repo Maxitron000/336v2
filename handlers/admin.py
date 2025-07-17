@@ -534,8 +534,39 @@ async def callback_export_action(callback: CallbackQuery):
             filename = db.export_to_excel(days=365)  # Все данные за год
             period_text = "все данные"
         elif export_type == "filter":
-            filename = db.export_to_excel(days=30)  # Последние 30 дней
-            period_text = "последние 30 дней"
+            # Показываем меню выбора периода
+            keyboard = [
+                [
+                    InlineKeyboardButton(text="📅 Сегодня", callback_data="export_period_today"),
+                    InlineKeyboardButton(text="📅 Вчера", callback_data="export_period_yesterday")
+                ],
+                [
+                    InlineKeyboardButton(text="📅 Последние 7 дней", callback_data="export_period_week"),
+                    InlineKeyboardButton(text="📅 Последние 30 дней", callback_data="export_period_month")
+                ],
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_export_menu")]
+            ]
+            
+            await callback.message.edit_text(
+                "📅 **Выберите период для экспорта:**\n\n"
+                "Выберите временной интервал для экспорта данных:",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+                parse_mode="Markdown"
+            )
+            await callback.answer()
+            return
+        elif export_type == "csv":
+            await callback.answer("⚙️ CSV экспорт в разработке", show_alert=True)
+            return
+        elif export_type == "pdf":
+            await callback.answer("⚙️ PDF экспорт в разработке", show_alert=True)
+            return
+        elif export_type == "weekly":
+            filename = db.export_to_excel(days=7)
+            period_text = "еженедельный отчет"
+        elif export_type == "monthly":
+            filename = db.export_to_excel(days=30)
+            period_text = "месячный отчет"
         else:
             await callback.answer("⚙️ Функция в разработке", show_alert=True)
             return
@@ -553,6 +584,92 @@ async def callback_export_action(callback: CallbackQuery):
 
     except Exception as e:
         logging.error(f"Ошибка экспорта: {e}")
+        await callback.answer("❌ Ошибка при экспорте", show_alert=True)
+
+@router.callback_query(F.data.startswith("export_period_"))
+async def callback_export_period(callback: CallbackQuery):
+    """Экспорт данных за выбранный период"""
+    user_id = callback.from_user.id
+    if not await is_admin(user_id):
+        await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+        return
+
+    period = callback.data.split("_")[-1]
+
+    try:
+        from datetime import datetime, timedelta
+        
+        if period == "today":
+            # Экспорт за сегодня
+            today = datetime.now().date()
+            records = db.get_records_by_date(str(today))
+            period_text = f"за сегодня ({today.strftime('%d.%m.%Y')})"
+            
+        elif period == "yesterday":
+            # Экспорт за вчера
+            yesterday = (datetime.now() - timedelta(days=1)).date()
+            records = db.get_records_by_date(str(yesterday))
+            period_text = f"за вчера ({yesterday.strftime('%d.%m.%Y')})"
+            
+        elif period == "week":
+            # Экспорт за неделю
+            filename = db.export_to_excel(days=7)
+            period_text = "за последние 7 дней"
+            
+        elif period == "month":
+            # Экспорт за месяц
+            filename = db.export_to_excel(days=30)
+            period_text = "за последние 30 дней"
+        else:
+            await callback.answer("❌ Неизвестный период", show_alert=True)
+            return
+
+        # Для сегодня и вчера создаем специальный экспорт
+        if period in ["today", "yesterday"]:
+            if not records:
+                await callback.message.edit_text(
+                    f"📅 **Экспорт {period_text}**\n\n"
+                    "❌ Нет записей за выбранный период.",
+                    reply_markup=get_back_keyboard("admin_export_menu"),
+                    parse_mode="Markdown"
+                )
+                await callback.answer()
+                return
+            
+            # Создаем временный Excel файл для выбранного дня
+            filename = db.export_records_to_excel(records, period_text)
+        
+        if filename:
+            from aiogram.types import FSInputFile
+            import os
+            
+            if os.path.exists(filename):
+                document = FSInputFile(filename, filename=f"military_records_{period}.xlsx")
+                await callback.message.answer_document(
+                    document,
+                    caption=f"📤 Экспорт {period_text}"
+                )
+                
+                # Удаляем временный файл после отправки
+                try:
+                    os.remove(filename)
+                except:
+                    pass
+                    
+                await callback.message.edit_text(
+                    f"✅ **Экспорт завершен**\n\n"
+                    f"📤 Данные {period_text} успешно экспортированы и отправлены.",
+                    reply_markup=get_back_keyboard("admin_export_menu"),
+                    parse_mode="Markdown"
+                )
+                await callback.answer("✅ Файл отправлен")
+            else:
+                await callback.answer("❌ Ошибка создания файла", show_alert=True)
+        else:
+            await callback.answer("❌ Нет данных для экспорта", show_alert=True)
+
+    except Exception as e:
+        logging.error(f"Ошибка экспорта периода: {e}")
         await callback.answer("❌ Ошибка при экспорте", show_alert=True)
 
 # Остальные функции (summary, manage, и т.д.) остаются без изменений
