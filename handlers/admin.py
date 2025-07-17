@@ -495,6 +495,10 @@ async def callback_analytics_action(callback: CallbackQuery):
         )
         await callback.answer()
 
+    except Exception as e:
+        logging.error(f"Ошибка в analytics_action: {e}")
+        await callback.answer("❌ Ошибка выполнения действия", show_alert=True)
+
 @router.callback_query(F.data == "admin_export_menu")
 async def callback_admin_export_menu(callback: CallbackQuery):
     """Меню экспорта"""
@@ -727,11 +731,12 @@ async def callback_admin_remove(callback: CallbackQuery):
         admins = db.get_all_admins()
         regular_admins = [admin for admin in admins if admin['id'] != MAIN_ADMIN_ID]
 
-        if not regular_admins:
+        if```python
+ not regular_admins:
             await callback.message.edit_text(
                 "❌ Нет администраторов для удаления.\n"
                 "Главный администратор не может быть удален.",
-                reply_markup=get_back_keyboard("admin_manage"),```python
+                reply_markup=get_back_keyboard("admin_manage"),
                 parse_mode="Markdown"
             )
             return
