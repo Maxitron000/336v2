@@ -530,7 +530,7 @@ async def cmd_journal(message: Message, state: FSMContext):
         text = "📋 **Мой журнал**\n"
         text += "─" * 25 + "\n\n"
 
-        for i, record in enumerate(records, 1):
+        for i, record in enumerate(reversed(records), 1):
             timestamp = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
             formatted_date = timestamp.strftime('%d.%m.%Y')
             formatted_time = timestamp.strftime('%H:%M')
@@ -551,16 +551,18 @@ async def cmd_journal(message: Message, state: FSMContext):
             if i < len(records):
                 text += "─" * 20 + "\n\n"
 
-        # Показываем текущий статус
-        last_record = records[0]
-        if last_record['action'] == 'не в части':
-            current_status = "🔴 **Убыл (не в части)**"
-        else:
-            current_status = "🟢 **Прибыл (в части)**"
+        # Показываем текущий статус (берем последнюю запись из исходного списка)
+        original_records = db.get_user_records(user_id, limit=1)
+        if original_records:
+            last_record = original_records[0]
+            if last_record['action'] == 'не в части':
+                current_status = "🔴 **Убыл (не в части)**"
+            else:
+                current_status = "🟢 **Прибыл (в части)**"
 
-        text += f"\n━━━━━━━━━━━━━━━\n"
-        text += f"📊 Текущий статус: {current_status}\n"
-        text += f"📍 Последняя локация: {last_record['location']}"
+            text += f"\n━━━━━━━━━━━━━━━\n"
+            text += f"📊 Текущий статус: {current_status}\n"
+            text += f"📍 Последняя локация: {last_record['location']}"
 
         # Кнопка возврата в главное меню
         keyboard = [[InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")]]
@@ -608,7 +610,7 @@ async def callback_show_journal(callback: CallbackQuery):
         text = "📋 **Мой журнал**\n"
         text += "─" * 25 + "\n\n"
 
-        for i, record in enumerate(records, 1):
+        for i, record in enumerate(reversed(records), 1):
             timestamp = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
             formatted_date = timestamp.strftime('%d.%m.%Y')
             formatted_time = timestamp.strftime('%H:%M')
@@ -629,16 +631,18 @@ async def callback_show_journal(callback: CallbackQuery):
             if i < len(records):
                 text += "─" * 20 + "\n\n"
 
-        # Показываем текущий статус
-        last_record = records[0]
-        if last_record['action'] == 'не в части':
-            current_status = "🔴 **Убыл (не в части)**"
-        else:
-            current_status = "🟢 **Прибыл (в части)**"
+        # Показываем текущий статус (берем последнюю запись из исходного списка)
+        original_records = db.get_user_records(user_id, limit=1)
+        if original_records:
+            last_record = original_records[0]
+            if last_record['action'] == 'не в части':
+                current_status = "🔴 **Убыл (не в части)**"
+            else:
+                current_status = "🟢 **Прибыл (в части)**"
 
-        text += f"\n━━━━━━━━━━━━━━━\n"
-        text += f"📊 Текущий статус: {current_status}\n"
-        text += f"📍 Последняя локация: {last_record['location']}"
+            text += f"\n━━━━━━━━━━━━━━━\n"
+            text += f"📊 Текущий статус: {current_status}\n"
+            text += f"📍 Последняя локация: {last_record['location']}"
 
         # Кнопка возврата в главное меню
         keyboard = [[InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")]]
