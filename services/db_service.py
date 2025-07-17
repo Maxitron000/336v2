@@ -115,7 +115,7 @@ class DatabaseService:
                 logging.error(f"Некорректный user_id: {user_id}")
                 return False
 
-            if not action or action.strip() not in ['прибыл', 'убыл']:
+            if not action or action.strip() not in ['в части', 'не в части']:
                 logging.error(f"Некорректное действие: {action}")
                 return False
 
@@ -329,8 +329,8 @@ class DatabaseService:
                     ''', (user['id'],))
                     last_record = last_record_cursor.fetchone()
 
-                    # Проверяем статус: "убыл" = отсутствует, "прибыл" = присутствует
-                    if last_record and last_record['action'] == 'убыл':
+                    # Проверяем статус: "не в части" = отсутствует, "в части" = присутствует
+                    if last_record and last_record['action'] == 'не в части':
                         location = last_record['location']
                         absent_users.append({
                             'name': user['full_name'],
@@ -344,7 +344,7 @@ class DatabaseService:
                         location_groups[location]['names'].append(user['full_name'])
                         
                     else:
-                        # Если последнее действие "прибыл" или записей нет - считаем в части
+                        # Если последнее действие "в части" или записей нет - считаем в части
                         present_users.append({
                             'name': user['full_name'],
                             'location': 'В части'
