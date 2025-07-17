@@ -790,7 +790,7 @@ class DatabaseService:
                 for cell in worksheet[1]:
                     cell.fill = header_fill
                     cell.font = header_font
-cell.alignment = Alignment(horizontal='center', vertical='center')
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
                     cell.border = border
 
                 # Форматируем данные с цветовой заливкой
