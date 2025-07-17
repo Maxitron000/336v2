@@ -227,30 +227,37 @@ async def cmd_stats(message: Message):
     try:
         current_status = db.get_current_status()
         
-        text = "📊 **Быстрая статистика**\n\n"
+        text = "📊 **Быстрая сводка**\n\n"
         text += f"👥 Всего бойцов: {current_status['total']}\n"
         text += f"✅ В части: {current_status['present']}\n"
         text += f"❌ Вне части: {current_status['absent']}\n\n"
         
-        if current_status.get('present_list'):
-            text += "🟢 **Присутствующие:**\n"
-            for person in current_status['present_list'][:10]:  # Показываем максимум 10
-                text += f"• {person['name']} - {person['location']}\n"
+        # Отображаем группировку по локациям
+        if current_status.get('location_groups'):
+            text += "📍 **Группировка по локациям:**\n\n"
             
-            if len(current_status['present_list']) > 10:
-                text += f"... и еще {len(current_status['present_list']) - 10}\n"
-            text += "\n"
+            # Сначала показываем тех, кто в части
+            if 'В части' in current_status['location_groups']:
+                group = current_status['location_groups']['В части']
+                text += f"🟢 **В части: {group['count']}**\n"
+                for name in group['names'][:10]:  # Показываем максимум 10
+                    text += f"• {name}\n"
+                if len(group['names']) > 10:
+                    text += f"... и еще {len(group['names']) - 10}\n"
+                text += "\n"
+            
+            # Затем показываем отсутствующих по локациям
+            for location, group in current_status['location_groups'].items():
+                if location != 'В части':
+                    text += f"🔴 **{location}: {group['count']}**\n"
+                    for name in group['names'][:5]:  # Показываем максимум 5 для внешних локаций
+                        text += f"• {name}\n"
+                    if len(group['names']) > 5:
+                        text += f"... и еще {len(group['names']) - 5}\n"
+                    text += "\n"
         
-        if current_status['absent_list']:
-            text += "🔴 **Отсутствующие:**\n"
-            for person in current_status['absent_list'][:10]:  # Показываем максимум 10
-                text += f"• {person['name']} - {person['location']}\n"
-            
-            if len(current_status['absent_list']) > 10:
-                text += f"... и еще {len(current_status['absent_list']) - 10}"
-        else:
-            if not current_status.get('present_list'):
-                text += "✅ Все бойцы в части!"
+        if current_status['total'] == 0:
+            text += "ℹ️ Нет зарегистрированных бойцов"
         
         keyboard = [
             [InlineKeyboardButton(text="📈 Подробная статистика", callback_data="admin_stats")],

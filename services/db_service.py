@@ -304,7 +304,7 @@ class DatabaseService:
             }
 
     def get_current_status(self) -> Dict[str, Any]:
-        """Получить текущий статус всех пользователей"""
+        """Получить текущий статус всех пользователей с группировкой по локациям"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
@@ -314,8 +314,11 @@ class DatabaseService:
                 all_users = users_cursor.fetchall()
 
                 # Получаем последние действия каждого пользователя
-                absent_list = []
-                present_list = []
+                absent_users = []
+                present_users = []
+                
+                # Группировка по локациям
+                location_groups = {}
 
                 for user in all_users:
                     last_record_cursor = conn.execute('''
@@ -328,24 +331,38 @@ class DatabaseService:
 
                     # Проверяем статус: "убыл" = отсутствует, "прибыл" = присутствует
                     if last_record and last_record['action'] == 'убыл':
-                        absent_list.append({
-                            'name': user['full_name'],
-                            'location': last_record['location']
-                        })
-                    else:
-                        # Если последнее действие "прибыл" или записей нет (считаем присутствующим)
-                        location = last_record['location'] if last_record else 'В части'
-                        present_list.append({
+                        location = last_record['location']
+                        absent_users.append({
                             'name': user['full_name'],
                             'location': location
                         })
+                        
+                        # Группируем отсутствующих по локациям
+                        if location not in location_groups:
+                            location_groups[location] = {'count': 0, 'names': []}
+                        location_groups[location]['count'] += 1
+                        location_groups[location]['names'].append(user['full_name'])
+                        
+                    else:
+                        # Если последнее действие "прибыл" или записей нет - считаем в части
+                        present_users.append({
+                            'name': user['full_name'],
+                            'location': 'В части'
+                        })
+                        
+                        # Группируем присутствующих
+                        if 'В части' not in location_groups:
+                            location_groups['В части'] = {'count': 0, 'names': []}
+                        location_groups['В части']['count'] += 1
+                        location_groups['В части']['names'].append(user['full_name'])
 
                 return {
                     'total': len(all_users),
-                    'present': len(present_list),
-                    'absent': len(absent_list),
-                    'absent_list': absent_list,
-                    'present_list': present_list
+                    'present': len(present_users),
+                    'absent': len(absent_users),
+                    'absent_list': absent_users,
+                    'present_list': present_users,
+                    'location_groups': location_groups
                 }
         except Exception as e:
             logging.error(f"Ошибка получения статуса: {e}")

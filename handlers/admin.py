@@ -80,19 +80,32 @@ async def callback_admin_summary(callback: CallbackQuery):
         text += f"✅ В части: {stats['present']}\n"
         text += f"❌ Вне части: {stats['absent']}\n\n"
 
-        if stats.get('present_list'):
-            text += "🟢 Присутствующие:\n"
-            for person in stats['present_list']:
-                text += f"• {person['name']} - {person['location']}\n"
-            text += "\n"
-
-        if stats['absent_list']:
-            text += "🔴 Отсутствующие:\n"
-            for person in stats['absent_list']:
-                text += f"• {person['name']} - {person['location']}\n"
-        else:
-            if not stats.get('present_list'):
-                text += "✅ Все бойцы в части!"
+        # Отображаем группировку по локациям
+        if stats.get('location_groups'):
+            text += "📍 **Группировка по локациям:**\n\n"
+            
+            # Сначала показываем тех, кто в части
+            if 'В части' in stats['location_groups']:
+                group = stats['location_groups']['В части']
+                text += f"🟢 **В части: {group['count']}**\n"
+                for name in group['names'][:10]:  # Показываем максимум 10
+                    text += f"• {name}\n"
+                if len(group['names']) > 10:
+                    text += f"... и еще {len(group['names']) - 10}\n"
+                text += "\n"
+            
+            # Затем показываем отсутствующих по локациям
+            for location, group in stats['location_groups'].items():
+                if location != 'В части':
+                    text += f"🔴 **{location}: {group['count']}**\n"
+                    for name in group['names'][:5]:  # Показываем максимум 5 для внешних локаций
+                        text += f"• {name}\n"
+                    if len(group['names']) > 5:
+                        text += f"... и еще {len(group['names']) - 5}\n"
+                    text += "\n"
+        
+        if stats['total'] == 0:
+            text += "ℹ️ Нет зарегистрированных бойцов"
 
         await callback.message.edit_text(
             text,

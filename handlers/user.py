@@ -454,7 +454,7 @@ async def callback_location_selection(callback: CallbackQuery, state: FSMContext
         # Добавляем запись
         if db.add_record(user_id, action, location):
             status_text = "не в части" if action == "не в части" else "в части"
-            
+
             # Отправляем сообщение о статусе
             await callback.message.answer(
                 f"✅ Статус обновлен!\n"
@@ -761,7 +761,8 @@ async def handle_unknown_message(message: Message):
 
         # Проверяем частоту сообщений (защита от спама)
         if not can_user_make_action(user_id):
-            return  # Игнорируем частые сообщения
+            return  ```python
+# Игнорируем частые сообщения
 
         update_user_last_action(user_id)
 
@@ -801,3 +802,65 @@ async def send_admin_notification(bot, user_id: int, action: str, location: str)
         await bot.send_message(MAIN_ADMIN_ID, message)
     except Exception as e:
         logging.error(f"Ошибка при отправке уведомления админу: {e}")
+
+@router.callback_query(F.data == "action_arrived")
+async def callback_arrived(callback: CallbackQuery, state: FSMContext):
+    """Обработка кнопки 'Прибыл' - сразу записываем в часть без выбора локации"""
+    user_id = callback.from_user.id
+
+    # Проверяем, зарегистрирован ли пользователь
+    user = db.get_user(user_id)
+    if not user:
+        await callback.answer("❌ Сначала отправьте /start для регистрации", show_alert=True)
+        return
+
+    # Проверяем последнее действие
+    last_records = db.get_user_records(user_id, 1)
+    if last_records and last_records[0]['action'] == "прибыл":
+        await state.set_state(UserStates.showing_duplicate_action_warning)
+        last_time = datetime.fromisoformat(last_records[0]['timestamp'].replace('Z', '+00:00')).strftime('%d.%m.%Y в %H:%M')
+
+        keyboard = [
+            [InlineKeyboardButton(text="🔙 Понятно, вернуться в меню", callback_data="main_menu")]
+        ]
+        reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+        await callback.message.edit_text(
+            "⚠️ **Повторная отметка о прибытии**\n\n"
+            "Вы уже отмечены как **присутствующий в части**\n"
+            f"⏰ Время отметки: {last_time}\n\n"
+            "💡 **Что делать дальше:**\n"
+            "1️⃣ Если нужно убыть — нажмите «❌ Убыл»\n"
+            "2️⃣ Если ошиблись — просто вернитесь в меню",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        await callback.answer()
+        return
+
+    # Сразу записываем прибытие в часть
+    if db.add_record(user_id, "прибыл", "В части"):
+        # Очищаем состояние
+        await state.clear()
+
+        current_time = datetime.now().strftime('%H:%M')
+
+        keyboard = [
+            [InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")],
+            [InlineKeyboardButton(text="📋 Мои записи", callback_data="show_journal")]
+        ]
+        reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+        await callback.message.edit_text(
+            f"✅ **Прибытие зафиксировано!**\n\n"
+            f"👤 **Боец:** {user['full_name']}\n"
+            f"🏠 **Статус:** В части\n"
+            f"⏰ **Время:** {current_time}\n\n"
+            f"📝 Запись успешно добавлена в журнал.",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+    else:
+        await callback.answer("❌ Ошибка при сохранении записи", show_alert=True)
+
+    await callback.answer()
