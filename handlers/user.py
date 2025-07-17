@@ -50,44 +50,23 @@ def get_journal_keyboard():
 # Пагинация журнала убрана - показываем максимум 10 записей без пагинации
 
 def get_location_keyboard_with_pagination(action: str, current_page: int = 1):
-    """Создать клавиатуру локаций с пагинацией"""
-    per_page = 8  # 4 строки по 2 кнопки
-    start_idx = (current_page - 1) * per_page
-    end_idx = start_idx + per_page
-
-    page_locations = LOCATIONS[start_idx:end_idx]
-    total_pages = (len(LOCATIONS) + per_page - 1) // per_page
-
+    """Создать клавиатуру локаций без пагинации"""
     keyboard = []
 
-    # Кнопки локаций
-    for i in range(0, len(page_locations), 2):
+    # Показываем все локации без пагинации
+    for i in range(0, len(LOCATIONS), 2):
         row = []
-        for j in range(i, min(i + 2, len(page_locations))):
-            location = page_locations[j]
+        for j in range(i, min(i + 2, len(LOCATIONS))):
+            location = LOCATIONS[j]
             row.append(InlineKeyboardButton(
                 text=location,
                 callback_data=f"location_{action}_{location}"
             ))
         keyboard.append(row)
 
-    # Добавляем кнопку "Другое" только для убыли
+    # Добавляем кнопку "Другое" только для убыли и только один раз
     if action == "убыл":
         keyboard.append([InlineKeyboardButton(text="📝 Другое", callback_data=f"location_{action}_📝 Другое")])
-
-    # Пагинация для локаций
-    if total_pages > 1:
-        pagination_row = []
-
-        if current_page > 1:
-            pagination_row.append(InlineKeyboardButton(text="⬅️", callback_data=f"locations_page_{action}_{current_page - 1}"))
-
-        pagination_row.append(InlineKeyboardButton(text=f"{current_page}/{total_pages}", callback_data="locations_info"))
-
-        if current_page < total_pages:
-            pagination_row.append(InlineKeyboardButton(text="➡️", callback_data=f"locations_page_{action}_{current_page + 1}"))
-
-        keyboard.append(pagination_row)
 
     keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -392,9 +371,9 @@ async def callback_action_selection(callback: CallbackQuery, state: FSMContext):
                 await callback.answer()
                 return
 
-            # Для "Убыл" показываем выбор локаций с пагинацией
+            # Для "Убыл" показываем выбор локаций
             await callback.message.edit_text(
-                f"Выберите локацию, куда вы убыли:\n\n📍 Показано {min(8, len(LOCATIONS))} из {len(LOCATIONS)} локаций",
+                "Выберите локацию, куда вы убыли:",
                 reply_markup=get_location_keyboard("убыл")
             )
 
