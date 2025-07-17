@@ -1461,7 +1461,6 @@ async def callback_settings_action(callback: CallbackQuery):
             keyboard = [
                 [InlineKeyboardButton(text="🗑️ ПОДТВЕРДИТЬ ОЧИСТКУ", callback_data="settings_confirm_full_cleanup")],
                 [InlineKeyboardButton(text="🔙 Отмена", callback_data="admin_settings")]
-```python
             ]
 
             await callback.message.edit_text(
