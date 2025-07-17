@@ -792,11 +792,11 @@ async def send_admin_notification(bot, user_id: int, action: str, location: str)
         timestamp = datetime.now().strftime('%d.%m.%Y %H:%M')
 
         if action == "в части":
-            message = f"✅ [{timestamp}] Пользователь {full_name} прибыл в часть."
+            message = f"✅ [{timestamp}] Боец {full_name} прибыл в часть."
         elif action == "не в части":
-            message = f"❌ [{timestamp}] Пользователь {full_name} убыл из части. Локация: {location}"
+            message = f"❌ [{timestamp}] Боец {full_name} убыл из части. Локация: {location}"
         else:
-            message = f"ℹ️ [{timestamp}] Пользователь {full_name} совершил действие: {action}. Локация: {location}"
+            message = f"ℹ️ [{timestamp}] Боец {full_name} совершил действие: {action}. Локация: {location}"
 
         await bot.send_message(MAIN_ADMIN_ID, message)
     except Exception as e:
