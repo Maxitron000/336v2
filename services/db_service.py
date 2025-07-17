@@ -249,6 +249,12 @@ class DatabaseService:
             # Выбираем нужные колонки
             df = df[['ФИО', 'Действие', 'Локация', 'Время']]
 
+            # Убираем эмодзи из локаций
+            df['Локация'] = df['Локация'].str.replace(r'[^\w\s\-\.\,\(\)]', '', regex=True).str.strip()
+
+            # Форматируем время в читаемый вид
+            df['Время'] = df['Время'].dt.strftime('%d.%m.%Y %H:%M:%S')
+
             # Сохраняем в файл
             filename = f"military_records_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
