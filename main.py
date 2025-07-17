@@ -3,6 +3,7 @@ import asyncio
 import logging
 import os
 import sqlite3
+import signal
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from handlers import user, admin, stats, notifications
@@ -155,8 +156,39 @@ async def test_bot_functionality(bot):
         print_colored(f"  ❌ Ошибка тестирования: {str(e)}", Colors.FAIL)
         return False
 
+# Глобальные переменные для корректного завершения
+shutdown_event = asyncio.Event()
+bot_instance = None
+dp_instance = None
+
+def signal_handler(sig, frame):
+    """Обработчик сигналов для корректного завершения"""
+    print_colored(f"\n🛑 Получен сигнал {sig}. Начинаем корректное завершение...", Colors.WARNING)
+    shutdown_event.set()
+
+async def graceful_shutdown():
+    """Корректное завершение работы бота"""
+    try:
+        print_colored("🔄 Останавливаем планировщик...", Colors.WARNING)
+        if hasattr(notifications, 'scheduler') and notifications.scheduler.running:
+            notifications.scheduler.shutdown()
+        
+        print_colored("🔄 Закрываем соединение с ботом...", Colors.WARNING)
+        if bot_instance:
+            await bot_instance.session.close()
+        
+        print_colored("✅ Корректное завершение выполнено", Colors.OKGREEN)
+    except Exception as e:
+        print_colored(f"⚠️  Ошибка при завершении: {e}", Colors.WARNING)
+
 async def main():
     """Основная функция для запуска бота"""
+    global bot_instance, dp_instance
+    
+    # Настройка обработчиков сигналов
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+    
     # Проверяем, не запущен ли уже другой экземпляр
     import psutil
     import os
@@ -203,34 +235,34 @@ async def main():
 
     try:
         # Создание бота и диспетчера
-        bot = Bot(token=BOT_TOKEN)
+        bot_instance = Bot(token=BOT_TOKEN)
         storage = MemoryStorage()
-        dp = Dispatcher(storage=storage)
+        dp_instance = Dispatcher(storage=storage)
 
         # Тестируем подключение к Telegram
-        bot_test_ok = await test_bot_functionality(bot)
+        bot_test_ok = await test_bot_functionality(bot_instance)
         if not bot_test_ok:
             print_colored("\n❌ ОШИБКА: Не удается подключиться к Telegram API!", Colors.FAIL + Colors.BOLD)
             return
 
         # Регистрация роутеров
         print_colored("\n🔗 РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ:", Colors.OKBLUE + Colors.BOLD)
-        dp.include_router(user.router)
+        dp_instance.include_router(user.router)
         print_colored("  ✅ Пользовательские команды зарегистрированы", Colors.OKGREEN)
         
-        dp.include_router(admin.router)
+        dp_instance.include_router(admin.router)
         print_colored("  ✅ Административные команды зарегистрированы", Colors.OKGREEN)
         
-        dp.include_router(stats.router)
+        dp_instance.include_router(stats.router)
         print_colored("  ✅ Статистика зарегистрирована", Colors.OKGREEN)
         
-        dp.include_router(notifications.router)
+        dp_instance.include_router(notifications.router)
         print_colored("  ✅ Уведомления зарегистрированы", Colors.OKGREEN)
 
         # Настройка планировщика уведомлений
         print_colored("\n⏰ НАСТРОЙКА ПЛАНИРОВЩИКА:", Colors.OKBLUE + Colors.BOLD)
         try:
-            notifications.setup_scheduler(bot)
+            notifications.setup_scheduler(bot_instance)
             print_colored("  ✅ Планировщик уведомлений настроен", Colors.OKGREEN)
         except Exception as e:
             print_colored(f"  ⚠️  Ошибка планировщика: {str(e)}", Colors.WARNING)
@@ -248,7 +280,7 @@ async def main():
             print_colored(f"  ⚠️  Ошибка очистки: {str(e)}", Colors.WARNING)
 
         # Финальный тест
-        await test_bot_functionality(bot)
+        await test_bot_functionality(bot_instance)
 
         # Успешный запуск
         print_colored("\n" + "🎉" * 20, Colors.OKGREEN)
@@ -261,19 +293,45 @@ async def main():
         print_colored("\n📡 Начало прослушивания сообщений...", Colors.OKCYAN)
         
         try:
-            await dp.start_polling(bot, skip_updates=True)
+            # Создаем задачу для polling
+            polling_task = asyncio.create_task(dp_instance.start_polling(bot_instance, skip_updates=True))
+            
+            # Ожидаем либо завершения polling, либо сигнала завершения
+            done, pending = await asyncio.wait(
+                [polling_task, asyncio.create_task(shutdown_event.wait())],
+                return_when=asyncio.FIRST_COMPLETED
+            )
+            
+            # Если получен сигнал завершения
+            if shutdown_event.is_set():
+                print_colored("\n🛑 Получен сигнал завершения...", Colors.WARNING)
+                polling_task.cancel()
+                await graceful_shutdown()
+            
         except Exception as polling_error:
             if "Conflict" in str(polling_error):
                 print_colored(f"\n⚠️  Конфликт с другим экземпляром бота!", Colors.WARNING + Colors.BOLD)
                 print_colored("🔄 Попытка перезапуска через 5 секунд...", Colors.WARNING)
                 await asyncio.sleep(5)
-                await dp.start_polling(bot, skip_updates=True)
+                # Повторная попытка запуска
+                polling_task = asyncio.create_task(dp_instance.start_polling(bot_instance, skip_updates=True))
+                done, pending = await asyncio.wait(
+                    [polling_task, asyncio.create_task(shutdown_event.wait())],
+                    return_when=asyncio.FIRST_COMPLETED
+                )
+                if shutdown_event.is_set():
+                    polling_task.cancel()
+                    await graceful_shutdown()
             else:
+                print_colored(f"\n❌ Ошибка polling: {polling_error}", Colors.FAIL)
                 raise polling_error
 
     except Exception as e:
         print_colored(f"\n❌ КРИТИЧЕСКАЯ ОШИБКА ЗАПУСКА: {e}", Colors.FAIL + Colors.BOLD)
         print_colored("🔧 Проверьте конфигурацию и попробуйте снова", Colors.WARNING)
+        await graceful_shutdown()
+    finally:
+        print_colored("\n👋 Завершение работы бота", Colors.OKCYAN)
 
 if __name__ == '__main__':
     asyncio.run(main())
