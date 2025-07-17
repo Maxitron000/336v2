@@ -713,7 +713,6 @@ async def callback_export_action(callback: CallbackQuery):
                 ],
                 [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_export_menu")]
             ]
-            ]
 
             await callback.message.edit_text(
                 "📅 **Выберите период для экспорта:**\n\n"
