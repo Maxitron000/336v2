@@ -115,18 +115,7 @@ def check_handlers():
     
     return all_ok
 
-def check_bot_connection(bot_token):
-    """Проверка подключения к Telegram"""
-    print_colored("\n📱 ПРОВЕРКА TELEGRAM API:", Colors.OKBLUE + Colors.BOLD)
-    
-    try:
-        # Создаем временного бота для проверки
-        temp_bot = Bot(token=bot_token)
-        print_colored("  ✅ Токен бота: ВАЛИДНЫЙ", Colors.OKGREEN)
-        return True
-    except Exception as e:
-        print_colored(f"  ❌ Ошибка токена: {str(e)}", Colors.FAIL)
-        return False
+
 
 def print_system_info():
     """Информация о системе"""
@@ -203,8 +192,8 @@ async def main():
         dp = Dispatcher(storage=storage)
 
         # Тестируем подключение к Telegram
-        bot_connection_ok = await test_bot_connection(BOT_TOKEN)
-        if not bot_connection_ok:
+        bot_test_ok = await test_bot_functionality(bot)
+        if not bot_test_ok:
             print_colored("\n❌ ОШИБКА: Не удается подключиться к Telegram API!", Colors.FAIL + Colors.BOLD)
             return
 
