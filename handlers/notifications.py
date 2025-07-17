@@ -1,4 +1,3 @@
-
 from aiogram import Router, Bot
 from aiogram.types import Message
 from services.db_service import DatabaseService
@@ -15,13 +14,13 @@ async def send_reminders(bot: Bot):
         # Получаем всех пользователей
         users = db.get_all_users()
         reminder_text = "🔔 Напоминание: не забудьте отметиться в системе табеля!"
-        
+
         for user in users:
             try:
                 await bot.send_message(user['id'], reminder_text)
             except Exception as e:
                 logging.error(f"Ошибка отправки напоминания пользователю {user['id']}: {e}")
-        
+
         logging.info(f"Отправлено напоминаний: {len(users)}")
     except Exception as e:
         logging.error(f"Ошибка отправки напоминаний: {e}")
@@ -46,16 +45,17 @@ def setup_scheduler(bot: Bot):
             args=[bot],
             id='reminder_job'
         )
-        
+
         scheduler.add_job(
             cleanup_old_records,
             'cron',
-            hour=2,
+            hour=3,
             minute=0,
             id='cleanup_job'
         )
-        
+
         scheduler.start()
-        logging.info("✅ Планировщик уведомлений настроен")
+        logging.info("Планировщик уведомлений запущен")
+
     except Exception as e:
         logging.error(f"Ошибка настройки планировщика: {e}")

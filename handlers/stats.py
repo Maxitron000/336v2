@@ -1,11 +1,19 @@
-from aiogram import Router
-from aiogram.types import Message
+from aiogram import Router, F
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 from services.db_service import DatabaseService
 from config import MAIN_ADMIN_ID
+import logging
+from datetime import datetime, timedelta
 
 router = Router()
 db = DatabaseService()
+
+async def is_admin(user_id: int) -> bool:
+    """Проверить права администратора"""
+    if user_id == MAIN_ADMIN_ID:
+        return True
+    return db.is_admin(user_id)
 
 @router.message(Command("stats"))
 async def cmd_stats(message: Message):
@@ -27,7 +35,7 @@ async def cmd_stats(message: Message):
 **📍 Отсутствующие:**
 """
 
-        if stats['absent_list']:
+        if stats.get('absent_list'):
             for person in stats['absent_list']:
                 stats_text += f"• {person['name']} ({person['location']})\n"
         else:
@@ -36,10 +44,7 @@ async def cmd_stats(message: Message):
         await message.answer(stats_text, parse_mode="Markdown")
 
     except Exception as e:
-        await message.answer(f"❌ Ошибка получения статистики: {e}")
-from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.filters import Command
+        await message.answer(f"❌ Ошибка получения статистики: {e}")ogram.filters import Command
 from services.db_service import DatabaseService
 from config import MAIN_ADMIN_ID
 import logging
@@ -196,6 +201,36 @@ async def callback_journal_export(callback: CallbackQuery):
 
     if not await is_admin(user_id):
         await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+        return
+
+    try:
+        records = db.get_all_records(days=30, limit=1000)
+        
+        if records:
+            filename = db.export_records_to_excel(records, "журнал за 30 дней")
+            
+            if filename:
+                from aiogram.types import FSInputFile
+                import os
+                
+                if os.path.exists(filename):
+                    document = FSInputFile(filename)
+                    await callback.message.answer_document(
+                        document,
+                        caption="📊 Экспорт журнала за последние 30 дней"
+                    )
+                    os.remove(filename)
+                    await callback.answer("✅ Журнал экспортирован")
+                else:
+                    await callback.answer("❌ Ошибка создания файла", show_alert=True)
+            else:
+                await callback.answer("❌ Ошибка экспорта", show_alert=True)
+        else:
+            await callback.answer("❌ Нет данных для экспорта", show_alert=True)
+            
+    except Exception as e:
+        logging.error(f"Ошибка экспорта журнала: {e}")
+        await callback.answer("❌ Ошибка экспорта", show_alert=True)ack.answer("❌ У вас нет прав администратора", show_alert=True)
         return
 
     try:

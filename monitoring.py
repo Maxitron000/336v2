@@ -82,6 +82,35 @@ class SystemMonitor:
             return {
                 'memory_usage': memory_percent,
                 'cpu_usage': cpu_percent,
+                'db_size_mb': db_size / (1024 * 1024)
+            }
+        except Exception as e:
+            return {'error': str(e)}
+    
+    async def analyze_user_patterns(self):
+        """Анализ паттернов пользователей"""
+        try:
+            records = self.db.get_all_records(days=30, limit=10000)
+            
+            if not records:
+                return {'error': 'Нет данных для анализа'}
+            
+            user_activity = {}
+            for record in records:
+                name = record['full_name']
+                user_activity[name] = user_activity.get(name, 0) + 1
+            
+            # Анализируем паттерны
+            active_users = len(user_activity)
+            total_actions = len(records)
+            
+            return {
+                'active_users': active_users,
+                'total_actions': total_actions,
+                'avg_actions_per_user': round(total_actions / active_users, 2) if active_users > 0 else 0
+            }
+        except Exception as e:
+            return {'error': str(e)}
                 'db_size_mb': round(db_size / (1024 * 1024), 2),
                 'uptime': datetime.now().isoformat()
             }
@@ -137,6 +166,7 @@ class SystemMonitor:
 async def get_system_health():
     """Получить состояние системы"""
     monitor = SystemMonitor()
+    return await monitor.check_system_health()ystemMonitor()
     return await monitor.check_system_health()
 
 # Пример использования

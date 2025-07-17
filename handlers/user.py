@@ -121,6 +121,12 @@ async def handle_name_input(message: Message, state: FSMContext):
         # Проверка длины (минимум 3 символа)
         if len(full_name) < 3 or len(full_name) > 50:
             await message.answer(
+                "❌ Неверная длина имени!\n\n"
+                "Имя должно содержать от 3 до 50 символов.\n"
+                "Введите ваше ФИО в формате: Фамилия И.О.\n"
+                "Пример: Иванов И.И."
+            )
+            returnwait message.answer(
                 "❌ ФИО должно содержать от 3 до 50 символов!\n\n"
                 f"Введено: {len(full_name)} символов\n"
                 "Попробуйте еще раз:"

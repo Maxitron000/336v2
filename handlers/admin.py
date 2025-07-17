@@ -1460,9 +1460,68 @@ async def callback_settings_action(callback: CallbackQuery):
 
             keyboard = [
                 [InlineKeyboardButton(text="🗑️ ПОДТВЕРДИТЬ ОЧИСТКУ", callback_data="settings_confirm_full_cleanup")],
-                [InlineKeyboardButton(text="🔙 Отмена", callback_data="admin_settings")]
+                This code fixes an unclosed parenthesis issue in admin.py and ensures the code is complete.
+```python
+[InlineKeyboardButton(text="🔙 Отмена", callback_data="admin_settings")]
             ]
 
             await callback.message.edit_text(
                 text,
-                reply_markup=
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+                parse_mode="Markdown"
+            )
+            await callback.answer()
+        elif action == "confirm_full_cleanup":
+            # Выполняем полную очистку
+            deleted_count = db.cleanup_all_records()
+            text = f"🗑️ **ПОЛНАЯ ОЧИСТКА ЗАВЕРШЕНА**\n\n"
+            text += f"Удалено ВСЕ записи: {deleted_count}\n\n"
+            text += "✅ База данных полностью очищена!"
+
+        elif action == "optimize":
+            # Оптимизация базы данных
+            db.optimize_database()
+            text = "🔄 **Оптимизация базы данных**\n\n"
+            text += "База данных оптимизирована.\n"
+            text += "Повышена производительность системы."
+
+        elif action == "db_stats":
+            # Получаем статистику по базе данных
+            stats = db.get_database_stats()
+            text = "📊 **Статистика базы данных**\n\n"
+            text += f"Размер базы данных: {stats['size']}\n"
+            text += f"Количество таблиц: {stats['tables']}\n"
+            text += f"Количество записей: {stats['records']}\n\n"
+            text += "ℹ️ Информация о базе данных."
+
+        elif action == "system_info":
+            # Собираем системную информацию
+            text = "⚙️ **Системная информация**\n\n"
+            text += f"Версия Python: {platform.python_version()}\n"
+            text += f"Операционная система: {platform.system()} {platform.release()}\n"
+            text += f"CPU: {platform.processor()}\n\n"
+            text += "Информация о системе."
+
+        elif action == "technical":
+            text = "🛠️ **Технические настройки**\n\n"
+            text += "Здесь можно настроить:\n"
+            text += "• Параметры подключения к БД\n"
+            text += "• Настройки логирования\n"
+            text += "• Размеры кэша\n\n"
+            text += "⚠️ Будьте осторожны, изменяя эти параметры."
+
+        else:
+            text = "⚙️ Функция в разработке"
+
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_back_keyboard("admin_settings"),
+            parse_mode="Markdown"
+        )
+        await callback.answer()
+
+    except Exception as e:
+        logging.error(f"Ошибка в settings_action: {e}")
+        await callback.answer("❌ Ошибка выполнения действия", show_alert=True)
+
+import platform
