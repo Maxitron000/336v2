@@ -42,7 +42,7 @@ def get_location_keyboard(action: str):
 
     # Показываем все локации кроме "Другое"
     locations_to_show = [loc for loc in LOCATIONS if loc != "📝 Другое"]
-    
+
     for i in range(0, len(locations_to_show), 2):
         row = []
         for j in range(i, min(i + 2, len(locations_to_show))):
@@ -72,7 +72,7 @@ def get_journal_keyboard():
 async def cmd_start(message: Message, state: FSMContext):
     """Обработчик команды /start"""
     from aiogram.types import ReplyKeyboardRemove
-    
+
     user = message.from_user
     user_id = user.id
     username = user.username or f"user_{user_id}"
@@ -301,12 +301,12 @@ async def callback_action_selection(callback: CallbackQuery, state: FSMContext):
             if last_records and last_records[0]['action'] == "в части":
                 await state.set_state(UserStates.showing_duplicate_action_warning)
                 last_time = datetime.fromisoformat(last_records[0]['timestamp'].replace('Z', '+00:00')).strftime('%d.%m.%Y в %H:%M')
-                
+
                 keyboard = [
                     [InlineKeyboardButton(text="🔙 Понятно, вернуться в меню", callback_data="main_menu")]
                 ]
                 reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
-                
+
                 await callback.message.edit_text(
                     "⚠️ **Повторная отметка о прибытии**\n\n"
                     "Вы уже отмечены как **находящийся в части**\n"
@@ -347,12 +347,12 @@ async def callback_action_selection(callback: CallbackQuery, state: FSMContext):
             if last_records and last_records[0]['action'] == "не в части":
                 await state.set_state(UserStates.showing_duplicate_action_warning)
                 last_time = datetime.fromisoformat(last_records[0]['timestamp'].replace('Z', '+00:00')).strftime('%d.%m.%Y в %H:%M')
-                
+
                 keyboard = [
                     [InlineKeyboardButton(text="🔙 Понятно, вернуться в меню", callback_data="main_menu")]
                 ]
                 reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
-                
+
                 await callback.message.edit_text(
                     "⚠️ **Повторная отметка об убытии**\n\n"
                     "Вы уже отмечены как **отсутствующий**\n"
@@ -521,17 +521,17 @@ async def cmd_journal(message: Message, state: FSMContext):
         # Показываем текущий статус
         last_record = records[0]
         if last_record['action'] == 'не в части':
-            current_status = "🔴 **Не в части**"
+            current_status = "🔴 **Убыл (не в части)**"
         else:
-            current_status = "🟢 **В части**"
+            current_status = "🟢 **Прибыл (в части)**"
 
         text += f"\n━━━━━━━━━━━━━━━\n"
         text += f"📊 Текущий статус: {current_status}\n"
         text += f"📍 Последняя локация: {last_record['location']}"
 
         # Кнопка возврата в главное меню
-        keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="main_menu")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        keyboard = [[InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")]]
+        reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
 
         await message.answer(text, reply_markup=reply_markup, parse_mode="Markdown")
 
@@ -566,7 +566,7 @@ async def callback_show_journal(callback: CallbackQuery):
                 "📝 У вас пока нет записей в журнале.\n"
                 "Сделайте первую отметку о прибытии или убытии!",
                 parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Главное меню", callback_data="main_menu")]])
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")]])
             )
             await callback.answer()
             return
@@ -599,17 +599,17 @@ async def callback_show_journal(callback: CallbackQuery):
         # Показываем текущий статус
         last_record = records[0]
         if last_record['action'] == 'не в части':
-            current_status = "🔴 **Не в части**"
+            current_status = "🔴 **Убыл (не в части)**"
         else:
-            current_status = "🟢 **В части**"
+            current_status = "🟢 **Прибыл (в части)**"
 
         text += f"\n━━━━━━━━━━━━━━━\n"
         text += f"📊 Текущий статус: {current_status}\n"
         text += f"📍 Последняя локация: {last_record['location']}"
 
         # Кнопка возврата в главное меню
-        keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="main_menu")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        keyboard = [[InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")]]
+        reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
 
         await callback.message.edit_text(text, reply_markup=reply_markup, parse_mode="Markdown")
         await callback.answer()
@@ -618,7 +618,7 @@ async def callback_show_journal(callback: CallbackQuery):
         logging.error(f"Ошибка в callback_show_journal: {e}")
         await callback.message.edit_text(
             "❌ Ошибка при загрузке журнала.\nПопробуйте позже.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Главное меню", callback_data="main_menu")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")]])
         )
         await callback.answer()
 
