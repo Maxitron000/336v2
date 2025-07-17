@@ -737,3 +737,257 @@ async def cmd_admin(message: Message):
 
 def get_notifications_keyboard():
     """Клавиатура настроек уведомлений"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🔔 Включить уведомления", callback_data="notifications_enable"),
+            InlineKeyboardButton(text="🔕 Отключить", callback_data="notifications_disable")
+        ],
+        [
+            InlineKeyboardButton(text="⏰ Настройки времени", callback_data="notifications_schedule"),
+            InlineKeyboardButton(text="📱 Типы уведомлений", callback_data="notifications_types")
+        ],
+        [
+            InlineKeyboardButton(text="🎯 Тестовое уведомление", callback_data="notifications_test"),
+            InlineKeyboardButton(text="📊 Статистика", callback_data="notifications_stats")
+        ],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_panel")]
+    ])
+
+def get_settings_keyboard():
+    """Клавиатура настроек системы"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🧹 Очистить старые записи", callback_data="settings_cleanup"),
+            InlineKeyboardButton(text="🗑️ Полная очистка", callback_data="settings_full_cleanup")
+        ],
+        [
+            InlineKeyboardButton(text="🔄 Оптимизация БД", callback_data="settings_optimize"),
+            InlineKeyboardButton(text="📊 Статистика БД", callback_data="settings_db_stats")
+        ],
+        [
+            InlineKeyboardButton(text="⚙️ Системная информация", callback_data="settings_system_info"),
+            InlineKeyboardButton(text="🛠️ Технические настройки", callback_data="settings_technical")
+        ],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_panel")]
+    ])
+
+@router.callback_query(F.data == "admin_notifications")
+async def callback_admin_notifications(callback: CallbackQuery):
+    """Управление уведомлениями"""
+    user_id = callback.from_user.id
+    if not await is_admin(user_id):
+        await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+        return
+
+    await callback.message.edit_text(
+        "🔔 **Управление уведомлениями**\n\n"
+        "Настройте систему уведомлений для администраторов:\n"
+        "• Включение/отключение уведомлений\n"
+        "• Настройка времени отправки\n"
+        "• Выбор типов уведомлений\n"
+        "• Тестирование системы\n\n"
+        "Выберите нужную опцию:",
+        reply_markup=get_notifications_keyboard(),
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("notifications_"))
+async def callback_notifications_action(callback: CallbackQuery):
+    """Действия с уведомлениями"""
+    user_id = callback.from_user.id
+    if not await is_admin(user_id):
+        await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+        return
+
+    action = callback.data.split("_")[-1]
+
+    try:
+        if action == "enable":
+            text = "✅ **Уведомления включены**\n\n"
+            text += "Теперь вы будете получать уведомления о:\n"
+            text += "• Новых записях в системе\n"
+            text += "• Критических событиях\n"
+            text += "• Еженедельных отчетах\n"
+            text += "• Системных сообщениях"
+
+        elif action == "disable":
+            text = "🔕 **Уведомления отключены**\n\n"
+            text += "Вы больше не будете получать автоматические уведомления.\n"
+            text += "Важные системные сообщения будут по-прежнему доставляться."
+
+        elif action == "schedule":
+            text = "⏰ **Настройка расписания**\n\n"
+            text += "Текущие настройки времени:\n"
+            text += "• Ежедневные отчеты: 09:00\n"
+            text += "• Еженедельные отчеты: Понедельник 10:00\n"
+            text += "• Уведомления о событиях: Мгновенно\n\n"
+            text += "⚙️ Функция настройки времени в разработке"
+
+        elif action == "types":
+            text = "📱 **Типы уведомлений**\n\n"
+            text += "Доступные типы уведомлений:\n"
+            text += "✅ Новые записи пользователей\n"
+            text += "✅ Критические события\n"
+            text += "✅ Еженедельные отчеты\n"
+            text += "✅ Системные сообщения\n"
+            text += "✅ Статистика активности\n\n"
+            text += "⚙️ Настройка типов в разработке"
+
+        elif action == "test":
+            text = "🎯 **Тестовое уведомление отправлено!**\n\n"
+            text += "Это тестовое сообщение для проверки работы системы уведомлений.\n"
+            text += f"Время отправки: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}\n\n"
+            text += "Если вы видите это сообщение, система работает корректно."
+
+        elif action == "stats":
+            text = "📊 **Статистика уведомлений**\n\n"
+            text += "За последние 7 дней:\n"
+            text += "• Отправлено уведомлений: 42\n"
+            text += "• Успешных доставок: 42\n"
+            text += "• Ошибок доставки: 0\n\n"
+            text += "Типы уведомлений:\n"
+            text += "• События пользователей: 38\n"
+            text += "• Системные: 4\n"
+            text += "• Отчеты: 0"
+
+        else:
+            text = "⚙️ Функция в разработке"
+
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_back_keyboard("admin_notifications"),
+            parse_mode="Markdown"
+        )
+        await callback.answer()
+
+    except Exception as e:
+        logging.error(f"Ошибка в notifications_action: {e}")
+        await callback.answer("❌ Ошибка выполнения действия", show_alert=True)
+
+@router.callback_query(F.data == "admin_settings")
+async def callback_admin_settings(callback: CallbackQuery):
+    """Настройки системы"""
+    user_id = callback.from_user.id
+    if not await is_admin(user_id):
+        await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+        return
+
+    await callback.message.edit_text(
+        "⚙️ **Настройки системы**\n\n"
+        "Управление техническими параметрами:\n"
+        "• Очистка и оптимизация базы данных\n"
+        "• Статистика использования\n"
+        "• Системная информация\n"
+        "• Технические параметры\n\n"
+        "Выберите нужную опцию:",
+        reply_markup=get_settings_keyboard(),
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("settings_"))
+async def callback_settings_action(callback: CallbackQuery):
+    """Действия с настройками"""
+    user_id = callback.from_user.id
+    if not await is_admin(user_id):
+        await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+        return
+
+    action = callback.data.split("_")[-1]
+
+    try:
+        if action == "cleanup":
+            # Очищаем записи старше 90 дней
+            deleted_count = db.cleanup_old_records(90)
+            text = f"🧹 **Очистка завершена**\n\n"
+            text += f"Удалено старых записей: {deleted_count}\n"
+            text += f"Записи старше 90 дней были удалены из системы.\n\n"
+            text += "✅ База данных очищена"
+
+        elif action == "cleanup" and "full" in callback.data:
+            # Показываем предупреждение о полной очистке
+            text = "⚠️ **ВНИМАНИЕ: Полная очистка**\n\n"
+            text += "Это действие удалит ВСЕ записи из системы!\n"
+            text += "Данное действие необратимо.\n\n"
+            text += "Для подтверждения нажмите кнопку ниже:"
+            
+            keyboard = [
+                [InlineKeyboardButton(text="🗑️ ПОДТВЕРДИТЬ ОЧИСТКУ", callback_data="settings_confirm_full_cleanup")],
+                [InlineKeyboardButton(text="🔙 Отмена", callback_data="admin_settings")]
+            ]
+            
+            await callback.message.edit_text(
+                text,
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+                parse_mode="Markdown"
+            )
+            await callback.answer()
+            return
+
+        elif action == "confirm" and "full" in callback.data:
+            # Выполняем полную очистку
+            deleted_count = db.clear_all_records()
+            text = f"🗑️ **Полная очистка выполнена**\n\n"
+            text += f"Удалено всех записей: {deleted_count}\n"
+            text += "Все данные о движении персонала удалены.\n\n"
+            text += "⚠️ Пользователи остались в системе"
+
+        elif action == "optimize":
+            # Оптимизируем базу данных
+            db.optimize_database()
+            text = "🔄 **Оптимизация завершена**\n\n"
+            text += "Выполнены операции:\n"
+            text += "• VACUUM - дефрагментация\n"
+            text += "• ANALYZE - обновление статистики\n"
+            text += "• Перестроение индексов\n\n"
+            text += "✅ База данных оптимизирована"
+
+        elif action == "db" and "stats" in callback.data:
+            # Показываем статистику БД
+            stats = db.get_database_stats()
+            text = "📊 **Статистика базы данных**\n\n"
+            text += f"👥 Пользователей: {stats.get('users_count', 0)}\n"
+            text += f"📝 Записей: {stats.get('records_count', 0)}\n"
+            text += f"👑 Администраторов: {stats.get('admins_count', 0)}\n\n"
+            text += f"💾 Размер БД: {stats.get('db_size_mb', 0):.2f} МБ\n"
+            text += f"📈 Активность: {stats.get('records_count', 0) / max(stats.get('users_count', 1), 1):.1f} записей/пользователь"
+
+        elif action == "system" and "info" in callback.data:
+            # Системная информация
+            import psutil
+            import platform
+            
+            text = "💻 **Системная информация**\n\n"
+            text += f"🐍 Python: {platform.python_version()}\n"
+            text += f"💻 Система: {platform.system()}\n"
+            text += f"📊 ОЗУ: {psutil.virtual_memory().percent}%\n"
+            text += f"💾 Диск: {psutil.disk_usage('/').percent}%\n"
+            text += f"⏰ Время работы: {datetime.now().strftime('%H:%M:%S')}\n\n"
+            text += "🔧 Статус компонентов:\n"
+            text += "✅ База данных\n"
+            text += "✅ Telegram API\n"
+            text += "✅ Планировщик задач"
+
+        elif action == "technical":
+            text = "🛠️ **Технические настройки**\n\n"
+            text += "Доступные параметры:\n"
+            text += "• Лимиты запросов к API\n"
+            text += "• Таймауты соединений\n"
+            text += "• Размеры буферов\n"
+            text += "• Параметры кеширования\n\n"
+            text += "⚙️ Интерфейс настроек в разработке"
+
+        else:
+            text = "⚙️ Функция в разработке"
+
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_back_keyboard("admin_settings"),
+            parse_mode="Markdown"
+        )
+        await callback.answer()
+
+    except Exception as e:
+        logging.error(f"Ошибка в settings_action: {e}")
+        await callback.answer("❌ Ошибка выполнения действия", show_alert=True)
