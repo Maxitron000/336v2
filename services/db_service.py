@@ -52,6 +52,35 @@ class DatabaseService:
             query += f" WHERE {condition}"
         return self.execute_query(query)
 
+    def get_current_status(self):
+        """Получить текущий статус для веб-интерфейса"""
+        try:
+            # Заглушка для демонстрации
+            return {
+                'total': 10,
+                'present': 7,
+                'absent': 3,
+                'unknown': 0,
+                'present_list': [
+                    {'name': 'Иванов И.И.', 'last_update': '2025-01-17T10:30:00'},
+                    {'name': 'Петров П.П.', 'last_update': '2025-01-17T09:15:00'},
+                ],
+                'absent_list': [
+                    {'name': 'Сидоров С.С.', 'location': 'Отпуск', 'last_update': '2025-01-16T18:00:00'},
+                    {'name': 'Козлов К.К.', 'location': 'Командировка', 'last_update': '2025-01-16T16:30:00'},
+                ]
+            }
+        except Exception as e:
+            print(f"Ошибка получения статуса: {e}")
+            return {
+                'total': 0,
+                'present': 0,
+                'absent': 0,
+                'unknown': 0,
+                'present_list': [],
+                'absent_list': []
+            }
+
 # Example usage (can be removed or commented out for production)
 if __name__ == '__main__':
     db_service = DatabaseService()

@@ -2,7 +2,7 @@
 from aiogram import Router
 from aiogram.types import Message
 from aiogram.filters import Command
-from services.db_service import DBService
+from services.db_service import DatabaseService
 from config import MAIN_ADMIN_ID
 
 router = Router()
@@ -16,7 +16,7 @@ async def cmd_stats(message: Message):
         return
     
     try:
-        db = DBService()
+        db = DatabaseService()
         stats = db.get_current_status()
         
         stats_text = f"""
