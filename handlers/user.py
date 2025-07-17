@@ -750,7 +750,7 @@ async def handle_unknown_message(message: Message):
         if not user:
             await message.answer(
                 "❌ Вы не зарегистрированы в системе!\n"
-                "Отправьте команду /start для регистрации."
+                ""Отправьте команду /start для регистрации."
             )
         else:
             await message.answer(
