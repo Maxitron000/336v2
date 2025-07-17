@@ -1,4 +1,3 @@
-
 import sqlite3
 import logging
 from datetime import datetime, timedelta
@@ -10,7 +9,7 @@ class DatabaseService:
     def __init__(self, db_path: str = "military_tracker.db"):
         self.db_path = db_path
         self.init_db()
-    
+
     def init_db(self):
         """Инициализация базы данных"""
         try:
@@ -24,7 +23,7 @@ class DatabaseService:
                         is_admin BOOLEAN DEFAULT FALSE
                     )
                 ''')
-                
+
                 conn.execute('''
                     CREATE TABLE IF NOT EXISTS records (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,7 +34,7 @@ class DatabaseService:
                         FOREIGN KEY (user_id) REFERENCES users (id)
                     )
                 ''')
-                
+
                 conn.execute('''
                     CREATE TABLE IF NOT EXISTS admins (
                         user_id INTEGER PRIMARY KEY,
@@ -43,16 +42,16 @@ class DatabaseService:
                         FOREIGN KEY (user_id) REFERENCES users (id)
                     )
                 ''')
-                
+
                 # Создаем индексы для улучшения производительности
                 conn.execute('CREATE INDEX IF NOT EXISTS idx_records_user_id ON records (user_id)')
                 conn.execute('CREATE INDEX IF NOT EXISTS idx_records_timestamp ON records (timestamp)')
-                
+
                 conn.commit()
                 logging.info("✅ База данных инициализирована")
         except Exception as e:
             logging.error(f"Ошибка инициализации БД: {e}")
-    
+
     def add_user(self, user_id: int, username: str, full_name: str) -> bool:
         """Добавить пользователя"""
         try:
@@ -66,7 +65,7 @@ class DatabaseService:
         except Exception as e:
             logging.error(f"Ошибка добавления пользователя: {e}")
             return False
-    
+
     def get_user(self, user_id: int) -> Optional[Dict[str, Any]]:
         """Получить пользователя"""
         try:
@@ -81,7 +80,7 @@ class DatabaseService:
         except Exception as e:
             logging.error(f"Ошибка получения пользователя: {e}")
             return None
-    
+
     def add_record(self, user_id: int, action: str, location: str) -> bool:
         """Добавить запись"""
         try:
@@ -95,7 +94,7 @@ class DatabaseService:
         except Exception as e:
             logging.error(f"Ошибка добавления записи: {e}")
             return False
-    
+
     def get_user_records(self, user_id: int, limit: int = 10) -> List[Dict[str, Any]]:
         """Получить записи пользователя"""
         try:
@@ -109,7 +108,7 @@ class DatabaseService:
         except Exception as e:
             logging.error(f"Ошибка получения записей пользователя: {e}")
             return []
-    
+
     def get_all_records(self, days: int = 7, limit: int = 100) -> List[Dict[str, Any]]:
         """Получить все записи за период"""
         try:
@@ -128,21 +127,21 @@ class DatabaseService:
         except Exception as e:
             logging.error(f"Ошибка получения всех записей: {e}")
             return []
-    
+
     def get_current_status(self) -> Dict[str, Any]:
         """Получить текущий статус всех пользователей"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
-                
+
                 # Получаем всех пользователей
                 users_cursor = conn.execute('SELECT id, full_name FROM users')
                 all_users = users_cursor.fetchall()
-                
+
                 # Получаем последние действия каждого пользователя
                 absent_list = []
                 present_count = 0
-                
+
                 for user in all_users:
                     last_record_cursor = conn.execute('''
                         SELECT action, location FROM records 
@@ -151,7 +150,7 @@ class DatabaseService:
                         LIMIT 1
                     ''', (user['id'],))
                     last_record = last_record_cursor.fetchone()
-                    
+
                     if last_record and last_record['action'] == 'убыл':
                         absent_list.append({
                             'name': user['full_name'],
@@ -159,7 +158,7 @@ class DatabaseService:
                         })
                     else:
                         present_count += 1
-                
+
                 return {
                     'total': len(all_users),
                     'present': present_count,
@@ -169,7 +168,7 @@ class DatabaseService:
         except Exception as e:
             logging.error(f"Ошибка получения статуса: {e}")
             return {'total': 0, 'present': 0, 'absent': 0, 'absent_list': []}
-    
+
     def is_admin(self, user_id: int) -> bool:
         """Проверить права администратора"""
         try:
@@ -182,7 +181,7 @@ class DatabaseService:
         except Exception as e:
             logging.error(f"Ошибка проверки прав админа: {e}")
             return False
-    
+
     def add_admin(self, user_id: int) -> bool:
         """Добавить администратора"""
         try:
@@ -196,7 +195,7 @@ class DatabaseService:
         except Exception as e:
             logging.error(f"Ошибка добавления админа: {e}")
             return False
-    
+
     def get_all_admins(self) -> List[Dict[str, Any]]:
         """Получить всех админов"""
         try:
@@ -212,7 +211,7 @@ class DatabaseService:
         except Exception as e:
             logging.error(f"Ошибка получения админов: {e}")
             return []
-    
+
     def get_all_users(self) -> List[Dict[str, Any]]:
         """Получить всех пользователей"""
         try:
@@ -223,22 +222,22 @@ class DatabaseService:
         except Exception as e:
             logging.error(f"Ошибка получения пользователей: {e}")
             return []
-    
+
     def export_to_excel(self, days: int = 30) -> Optional[str]:
         """Экспорт данных в Excel"""
         try:
             records = self.get_all_records(days=days, limit=10000)
-            
+
             if not records:
                 return None
-            
+
             # Создаем DataFrame
             df = pd.DataFrame(records)
-            
+
             # Форматируем данные
             df['timestamp'] = pd.to_datetime(df['timestamp'])
             df = df.sort_values('timestamp', ascending=False)
-            
+
             # Переименовываем колонки
             df = df.rename(columns={
                 'full_name': 'ФИО',
@@ -246,19 +245,78 @@ class DatabaseService:
                 'location': 'Локация',
                 'timestamp': 'Время'
             })
-            
+
             # Выбираем нужные колонки
             df = df[['ФИО', 'Действие', 'Локация', 'Время']]
-            
+
             # Сохраняем в файл
             filename = f"military_records_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-            df.to_excel(filename, index=False, engine='openpyxl')
-            
+
+            # Создаем Excel файл с улучшенным форматированием
+            with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Записи', index=False)
+
+                # Получаем рабочий лист и стили
+                worksheet = writer.sheets['Записи']
+                from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+
+                # Определяем стили
+                header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+                header_font = Font(color="FFFFFF", bold=True, size=12)
+
+                arrived_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")  # Светло-зеленый
+                departed_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")  # Светло-красный
+
+                border = Border(
+                    left=Side(style='thin'),
+                    right=Side(style='thin'),
+                    top=Side(style='thin'),
+                    bottom=Side(style='thin')
+                )
+
+                # Форматируем заголовки
+                for cell in worksheet[1]:
+                    cell.fill = header_fill
+                    cell.font = header_font
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+                    cell.border = border
+
+                # Форматируем данные с цветовой заливкой
+                for row_num, row in enumerate(worksheet.iter_rows(min_row=2), start=2):
+                    action_cell = row[1]  # Колонка "Действие"
+
+                    for cell in row:
+                        cell.border = border
+                        cell.alignment = Alignment(horizontal='left', vertical='center')
+
+                        # Применяем цветовую заливку в зависимости от действия
+                        if action_cell.value == "прибыл":
+                            cell.fill = arrived_fill
+                        elif action_cell.value == "убыл":
+                            cell.fill = departed_fill
+
+                # Автоматически подгоняем ширину колонок
+                for column in worksheet.columns:
+                    max_length = 0
+                    column_letter = column[0].column_letter
+                    for cell in column:
+                        try:
+                            if len(str(cell.value)) > max_length:
+                                max_length = len(str(cell.value))
+                        except:
+                            pass
+                    adjusted_width = min(max_length + 2, 50)
+                    worksheet.column_dimensions[column_letter].width = adjusted_width
+
+                # Устанавливаем высоту строк
+                for row in worksheet.iter_rows():
+                    worksheet.row_dimensions[row[0].row].height = 20
+
             return filename
         except Exception as e:
             logging.error(f"Ошибка экспорта в Excel: {e}")
             return None
-    
+
     def cleanup_old_records(self, days: int = 180) -> int:
         """Очистка старых записей"""
         try:
