@@ -757,5 +757,5 @@ async def handle_unknown_message(message: Message):
                 "ℹ️ Используйте кнопки меню для навигации.\n"
                 "Для возврата к главному меню отправьте /start"
             )
-    except Exception as e:```python
+    except Exception as e:
         logging.error(f"Ошибка в handle_unknown_message: {e}")
