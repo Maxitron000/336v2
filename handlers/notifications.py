@@ -1,4 +1,3 @@
-
 from aiogram import Router, Bot
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from services.db_service import DatabaseService
@@ -90,15 +89,15 @@ def get_random_text(category):
 def is_quiet_time():
     """Проверить, является ли текущее время тихим часом"""
     settings = load_notification_settings()
-    
+
     if not settings.get('quiet_mode', False):
         return False
-    
+
     try:
         now = datetime.now().time()
         quiet_start = datetime.strptime(settings['quiet_start'], '%H:%M').time()
         quiet_end = datetime.strptime(settings['quiet_end'], '%H:%M').time()
-        
+
         if quiet_start <= quiet_end:
             return quiet_start <= now <= quiet_end
         else:  # Через полночь
@@ -112,7 +111,7 @@ async def send_notification_to_admins(bot: Bot, message: str, parse_mode: str = 
     try:
         admins = db.get_all_admins()
         sent_count = 0
-        
+
         for admin in admins:
             try:
                 await bot.send_message(
@@ -123,10 +122,10 @@ async def send_notification_to_admins(bot: Bot, message: str, parse_mode: str = 
                 sent_count += 1
             except Exception as e:
                 logging.error(f"Ошибка отправки уведомления админу {admin['id']}: {e}")
-        
+
         logging.info(f"Уведомление отправлено {sent_count} администраторам")
         return sent_count
-        
+
     except Exception as e:
         logging.error(f"Ошибка отправки уведомлений админам: {e}")
         return 0
@@ -135,7 +134,7 @@ async def send_morning_reminder(bot: Bot):
     """Утреннее напоминание"""
     if is_quiet_time():
         return
-    
+
     try:
         text = get_random_text('morning')
         await send_notification_to_admins(bot, text)
@@ -147,18 +146,18 @@ async def send_evening_reminder(bot: Bot):
     """Вечернее напоминание"""
     if is_quiet_time():
         return
-    
+
     try:
         # Получаем статистику дня
         records_today = db.get_records_today()
         status = db.get_current_status()
-        
+
         text = get_random_text('evening')
         text += f"\n\n📊 **Статистика дня:**\n"
         text += f"• Записей сегодня: {len(records_today)}\n"
         text += f"• В части: {status['present']}\n"
         text += f"• Вне части: {status['absent']}"
-        
+
         await send_notification_to_admins(bot, text, parse_mode="Markdown")
         logging.info("Отправлено вечернее напоминание")
     except Exception as e:
@@ -168,54 +167,54 @@ async def send_weekly_report(bot: Bot):
     """Еженедельный отчет"""
     if is_quiet_time():
         return
-    
+
     try:
         # Статистика за неделю
         records_week = db.get_all_records(days=7)
         users = db.get_all_users()
-        
+
         # Топ активных пользователей
         user_activity = {}
         for record in records_week:
             name = record['full_name']
             user_activity[name] = user_activity.get(name, 0) + 1
-        
+
         top_users = sorted(user_activity.items(), key=lambda x: x[1], reverse=True)[:5]
-        
+
         text = get_random_text('weekly')
         text += f"\n\n📊 **Еженедельная сводка:**\n"
         text += f"• Всего записей: {len(records_week)}\n"
         text += f"• Активных пользователей: {len(user_activity)}\n"
         text += f"• Всего зарегистрировано: {len(users)}\n\n"
-        
+
         if top_users:
             text += f"🏆 **ТОП активности:**\n"
             for i, (name, count) in enumerate(top_users, 1):
                 text += f"{i}. {name}: {count} записей\n"
-        
+
         # Создаем Excel отчет
         filename = db.export_to_excel(days=7)
-        
+
         await send_notification_to_admins(bot, text, parse_mode="Markdown")
-        
+
         # Отправляем файл главному админу
         if filename:
             try:
                 from config import MAIN_ADMIN_ID
                 from aiogram.types import FSInputFile
-                
+
                 document = FSInputFile(filename)
                 await bot.send_document(
                     MAIN_ADMIN_ID,
                     document,
                     caption="📊 Еженедельный отчет в Excel"
                 )
-                
+
                 # Удаляем временный файл
                 os.remove(filename)
             except Exception as e:
                 logging.error(f"Ошибка отправки Excel файла: {e}")
-        
+
         logging.info("Отправлен еженедельный отчет")
     except Exception as e:
         logging.error(f"Ошибка еженедельного отчета: {e}")
@@ -224,12 +223,12 @@ async def cleanup_old_records():
     """Очистка старых записей"""
     try:
         deleted_count = db.cleanup_old_records(days=180)  # 6 месяцев
-        
+
         if deleted_count > 0:
             message = f"🧹 **Автоматическая очистка**\n\n"
             message += f"Удалено старых записей: {deleted_count}\n"
             message += f"Записи старше 180 дней были удалены для оптимизации."
-            
+
             from config import MAIN_ADMIN_ID
             try:
                 # Уведомляем только главного админа
@@ -237,7 +236,7 @@ async def cleanup_old_records():
                 await bot.send_message(MAIN_ADMIN_ID, message, parse_mode="Markdown")
             except Exception as e:
                 logging.error(f"Ошибка уведомления об очистке: {e}")
-        
+
         logging.info(f"Очищено старых записей: {deleted_count}")
     except Exception as e:
         logging.error(f"Ошибка очистки записей: {e}")
@@ -245,11 +244,11 @@ async def cleanup_old_records():
 def setup_scheduler(bot: Bot):
     """Настройка планировщика задач"""
     settings = load_notification_settings()
-    
+
     try:
         # Очищаем существующие задачи
         scheduler.remove_all_jobs()
-        
+
         # Утренние напоминания
         if settings.get('morning_reminder', True):
             hour, minute = map(int, settings['morning_time'].split(':'))
@@ -261,7 +260,7 @@ def setup_scheduler(bot: Bot):
                 args=[bot],
                 id='morning_reminder'
             )
-        
+
         # Вечерние напоминания
         if settings.get('evening_reminder', True):
             hour, minute = map(int, settings['evening_time'].split(':'))
@@ -273,17 +272,17 @@ def setup_scheduler(bot: Bot):
                 args=[bot],
                 id='evening_reminder'
             )
-        
+
         # Еженедельные отчеты
         if settings.get('weekly_report', True):
             day_map = {
                 'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3,
                 'friday': 4, 'saturday': 5, 'sunday': 6
             }
-            
+
             day_of_week = day_map.get(settings['weekly_day'], 0)
             hour, minute = map(int, settings['weekly_time'].split(':'))
-            
+
             scheduler.add_job(
                 send_weekly_report,
                 'cron',
@@ -293,7 +292,7 @@ def setup_scheduler(bot: Bot):
                 args=[bot],
                 id='weekly_report'
             )
-        
+
         # Автоочистка (каждую неделю в воскресенье в 3:00)
         scheduler.add_job(
             cleanup_old_records,
@@ -303,13 +302,13 @@ def setup_scheduler(bot: Bot):
             minute=0,
             id='cleanup_job'
         )
-        
+
         # Запускаем планировщик
         if not scheduler.running:
             scheduler.start()
-        
+
         logging.info("Планировщик уведомлений настроен и запущен")
-        
+
     except Exception as e:
         logging.error(f"Ошибка настройки планировщика: {e}")
 
@@ -319,34 +318,34 @@ async def handle_notification_settings(callback: CallbackQuery):
     try:
         action = callback.data.replace('notification_', '')
         settings = load_notification_settings()
-        
+
         if action == 'toggle_morning':
             settings['morning_reminder'] = not settings.get('morning_reminder', True)
             status = "включены" if settings['morning_reminder'] else "отключены"
             await callback.answer(f"Утренние уведомления {status}")
-            
+
         elif action == 'toggle_evening':
             settings['evening_reminder'] = not settings.get('evening_reminder', True)
             status = "включены" if settings['evening_reminder'] else "отключены"
             await callback.answer(f"Вечерние уведомления {status}")
-            
+
         elif action == 'toggle_weekly':
             settings['weekly_report'] = not settings.get('weekly_report', True)
             status = "включены" if settings['weekly_report'] else "отключены"
             await callback.answer(f"Еженедельные отчеты {status}")
-            
+
         elif action == 'toggle_quiet':
             settings['quiet_mode'] = not settings.get('quiet_mode', False)
             status = "включен" if settings['quiet_mode'] else "отключен"
             await callback.answer(f"Режим тишины {status}")
-        
+
         # Сохраняем настройки
         save_notification_settings(settings)
-        
+
         # Перенастраиваем планировщик
         bot = callback.bot
         setup_scheduler(bot)
-        
+
     except Exception as e:
         logging.error(f"Ошибка настройки уведомлений: {e}")
         await callback.answer("Ошибка изменения настроек")
