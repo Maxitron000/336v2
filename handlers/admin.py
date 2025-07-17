@@ -3,7 +3,7 @@ from aiogram.types import Message, CallbackQuery, FSInputFile
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from services.db_service import DBService
+from services.db_service import DBService, DatabaseService
 from config import MAIN_ADMIN_ID, LOCATIONS
 from keyboards import *
 import logging
@@ -49,7 +49,7 @@ async def callback_admin_summary(callback: CallbackQuery):
             return
 
         # Получаем данные
-        users = await DBService.get_all_users()
+        users = await DatabaseService.get_all_users()
         soldiers = sorted([u for u in users if not u.get('is_admin', False)], 
                          key=lambda x: x['full_name'])
 
@@ -167,7 +167,7 @@ async def callback_admin_panel(callback: CallbackQuery, state: FSMContext):
         await state.clear()
 
         # Получаем статистику для превью
-        users = await DBService.get_all_users()
+        users = await DatabaseService.get_all_users()
         soldiers = [u for u in users if not u.get('is_admin', False)]
         admins = [u for u in users if u.get('is_admin', False)]
 
@@ -225,7 +225,7 @@ async def callback_admin_personnel(callback: CallbackQuery):
             await callback.answer("❌ У вас нет прав", show_alert=True)
             return
 
-        users = await DBService.get_all_users()
+        users = await DatabaseService.get_all_users()
         soldiers = [u for u in users if not u.get('is_admin', False)]
         admins = [u for u in users if u.get('is_admin', False)]
 
@@ -258,7 +258,7 @@ async def callback_personnel_list(callback: CallbackQuery):
             await callback.answer("❌ У вас нет прав", show_alert=True)
             return
 
-        users = await DBService.get_all_users()
+        users = await DatabaseService.get_all_users()
         soldiers = sorted([u for u in users if not u.get('is_admin', False)], 
                          key=lambda x: x['full_name'])
 
@@ -344,7 +344,7 @@ async def callback_status_display(callback: CallbackQuery):
 
         status_type = callback.data.split("_")[1]  # all, present, absent
 
-        users = await DBService.get_all_users()
+        users = await DatabaseService.get_all_users()
         soldiers = sorted([u for u in users if not u.get('is_admin', False)], 
                          key=lambda x: x['full_name'])
 
@@ -407,7 +407,7 @@ async def callback_personnel_delete(callback: CallbackQuery, state: FSMContext):
             await callback.answer("❌ Доступно только главному админу", show_alert=True)
             return
 
-        users = await DBService.get_all_users()
+        users = await DatabaseService.get_all_users()
         soldiers = sorted([u for u in users if not u.get('is_admin', False)], 
                          key=lambda x: x['full_name'])
 
@@ -453,7 +453,7 @@ async def process_user_delete(message: Message, state: FSMContext):
             pass
 
         # Ищем пользователя
-        users = await DBService.get_all_users()
+        users = await DatabaseService.get_all_users()
         target_user = None
 
         for user in users:
@@ -587,7 +587,7 @@ async def callback_add_admin(callback: CallbackQuery, state: FSMContext):
             await callback.answer("❌ Доступно только главному админу", show_alert=True)
             return
 
-        users = await DBService.get_all_users()
+        users = await DatabaseService.get_all_users()
         soldiers = [u for u in users if not u.get('is_admin', False)]
 
         if not soldiers:

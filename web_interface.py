@@ -1,7 +1,7 @@
 from flask import Flask, render_template, jsonify
 import asyncio
 import threading
-from services.db_service import DBService
+from services.db_service import DatabaseService
 from datetime import datetime
 import pytz
 
@@ -28,7 +28,7 @@ def api_stats():
     """API endpoint для получения статистики"""
     try:
         # Используем синхронную версию
-        db = DBService()
+        db = DatabaseService()
         stats = db.get_current_status()
 
         # Форматируем время для записей
