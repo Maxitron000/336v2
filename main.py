@@ -9,6 +9,9 @@ async def main():
 
         # Удаляем меню команд
         await application.bot.delete_my_commands()
+        
+        # Убираем кнопку меню
+        await application.bot.set_my_commands([])
 
         # Инициализация хэндлера
         bot_handler = BotHandler(db)
