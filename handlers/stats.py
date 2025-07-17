@@ -6,6 +6,7 @@ from services.db_service import DatabaseService
 from config import MAIN_ADMIN_ID
 
 router = Router()
+db = DatabaseService()
 
 @router.message(Command("stats"))
 async def cmd_stats(message: Message):
@@ -16,11 +17,9 @@ async def cmd_stats(message: Message):
         return
     
     try:
-        db = DatabaseService()
         stats = db.get_current_status()
         
-        stats_text = f"""
-📊 **Текущая статистика**
+        stats_text = f"""📊 **Текущая статистика**
 
 👥 Всего личного состава: {stats['total']}
 ✅ Присутствуют: {stats['present']}
@@ -33,9 +32,9 @@ async def cmd_stats(message: Message):
             for person in stats['absent_list']:
                 stats_text += f"• {person['name']} ({person['location']})\n"
         else:
-            stats_text += "Все присутствуют ✅"
+            stats_text += "Все на месте! ✅"
         
-        await message.answer(stats_text)
+        await message.answer(stats_text, parse_mode="Markdown")
         
     except Exception as e:
         await message.answer(f"❌ Ошибка получения статистики: {e}")

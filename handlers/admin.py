@@ -1,886 +1,278 @@
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, FSInputFile
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from services.db_service import DBService, DatabaseService
-from config import MAIN_ADMIN_ID, LOCATIONS
-from keyboards import *
+from services.db_service import DatabaseService
+from config import MAIN_ADMIN_ID
 import logging
-import os
 from datetime import datetime, timedelta
-import pytz
-import json
-import io
-import aiofiles
-import openpyxl
-from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
-import asyncio
 
 router = Router()
 
-# Состояния для FSM
+# Состояния для админ-панели
 class AdminStates(StatesGroup):
     waiting_for_admin_id = State()
-    waiting_for_user_delete = State()
-    waiting_for_confirmation = State()
-    waiting_for_export_name = State()
 
-# Калининградский часовой пояс
-KALININGRAD_TZ = pytz.timezone('Europe/Kaliningrad')
+# Инициализация базы данных
+db = DatabaseService()
+
+def get_admin_panel_keyboard(is_main_admin: bool = False):
+    """Создать клавиатуру админ-панели"""
+    keyboard = [
+        [InlineKeyboardButton(text="📊 Быстрая сводка", callback_data="admin_summary")],
+        [InlineKeyboardButton(text="📋 Журнал событий", callback_data="admin_journal")],
+        [InlineKeyboardButton(text="📤 Экспорт данных", callback_data="admin_export")]
+    ]
+
+    if is_main_admin:
+        keyboard.append([InlineKeyboardButton(text="👥 Управление админами", callback_data="admin_manage")])
+
+    keyboard.append([InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")])
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+def get_back_keyboard(callback_data: str = "admin_panel"):
+    """Создать кнопку назад"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔙 Назад", callback_data=callback_data)]
+    ])
 
 async def is_admin(user_id: int) -> bool:
-    """Проверка прав администратора"""
-    if user_id == MAIN_ADMIN_ID:
-        return True
-    user = await DBService.get_user(user_id)
-    return user and user.get('is_admin', False)
+    """Проверить права администратора"""
+    return db.is_admin(user_id) or user_id == MAIN_ADMIN_ID
 
-async def is_main_admin(user_id: int) -> bool:
-    """Проверка главного админа"""
-    return user_id == MAIN_ADMIN_ID
+@router.callback_query(F.data == "admin_panel")
+async def callback_admin_panel(callback: CallbackQuery):
+    """Показать админ-панель"""
+    user_id = callback.from_user.id
+
+    if not await is_admin(user_id):
+        await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+        return
+
+    is_main_admin = user_id == MAIN_ADMIN_ID
+    await callback.message.edit_text(
+        "⚙️ Панель администратора\n\nВыберите действие:",
+        reply_markup=get_admin_panel_keyboard(is_main_admin)
+    )
+    await callback.answer()
 
 @router.callback_query(F.data == "admin_summary")
 async def callback_admin_summary(callback: CallbackQuery):
-    """Быстрая сводка"""
+    """Показать быструю сводку"""
+    user_id = callback.from_user.id
+
+    if not await is_admin(user_id):
+        await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+        return
+
     try:
-        if not await is_admin(callback.from_user.id):
-            await callback.answer("❌ У вас нет прав", show_alert=True)
-            return
+        # Получаем статистику
+        stats = db.get_current_status()
 
-        # Получаем данные
-        users = await DatabaseService.get_all_users()
-        soldiers = sorted([u for u in users if not u.get('is_admin', False)], 
-                         key=lambda x: x['full_name'])
+        text = "📊 Быстрая сводка\n\n"
+        text += f"👥 Всего бойцов: {stats['total']}\n"
+        text += f"✅ В части: {stats['present']}\n"
+        text += f"❌ Вне части: {stats['absent']}\n\n"
 
-        # Статистика по статусам
-        present_list = []
-        absent_list = []
-
-        for soldier in soldiers:
-            records = await DBService.get_user_records(soldier['id'], 1)
-            if records and records[0]['action'] == 'прибыл':
-                time_str = format_kaliningrad_time(records[0]['timestamp'])
-                location = records[0]['location']
-                present_list.append((soldier['full_name'], time_str, location))
-            else:
-                time_str = format_kaliningrad_time(records[0]['timestamp']) if records else "—"
-                location = records[0]['location'] if records else "—"
-                absent_list.append((soldier['full_name'], time_str, location))
-
-        # Формируем красивый текст
-        text = f"""
-📊 **БЫСТРАЯ СВОДКА**
-🏛️ *Рота "В"*
-
-━━━━━━━━━━━━━━━━━━━━━━━━━
-🕐 **{datetime.now(KALININGRAD_TZ).strftime('%d.%m.%Y %H:%M')}**
-━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🏠 **НА МЕСТЕ** ({len(present_list)} чел.):
-"""
-
-        if present_list:
-            for name, time, location in present_list[:10]:  # Первые 10
-                text += f"┣ ✅ {name}\n"
-                text += f"┃   📍 {location}\n"
-                text += f"┃   ⏰ {time}\n"
-            if len(present_list) > 10:
-                text += f"┗ ... и ещё {len(present_list) - 10} чел.\n"
+        if stats['absent_list']:
+            text += "🔴 Отсутствующие:\n"
+            for person in stats['absent_list']:
+                text += f"• {person['name']} - {person['location']}\n"
         else:
-            text += "┗ Никого нет\n"
-
-        text += f"\n🚶 **УБЫЛИ** ({len(absent_list)} чел.):\n"
-
-        if absent_list:
-            for name, time, location in absent_list[:10]:  # Первые 10
-                text += f"┣ ❌ {name}\n"
-                text += f"┃   📍 {location}\n"
-                text += f"┃   ⏰ {time}\n"
-            if len(absent_list) > 10:
-                text += f"┗ ... и ещё {len(absent_list) - 10} чел.\n"
-        else:
-            text += "┗ Все на месте\n"
-
-        text += "\n━━━━━━━━━━━━━━━━━━━━━━━━━"
+            text += "✅ Все бойцы в части!"
 
         await callback.message.edit_text(
             text,
-            reply_markup=get_back_keyboard("admin_panel"),
-            parse_mode='Markdown'
+            reply_markup=get_back_keyboard("admin_panel")
         )
         await callback.answer()
     except Exception as e:
-        logging.error(f"Ошибка в callback_admin_summary: {e}")
-        await callback.answer("❌ Ошибка")
-
-def format_kaliningrad_time(dt_str):
-    """Форматирование времени в калининградский часовой пояс"""
-    try:
-        dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
-        kld_time = dt.astimezone(KALININGRAD_TZ)
-        return kld_time.strftime('%d.%m.%Y %H:%M')
-    except:
-        return dt_str
-
-@router.message(Command("admin"))
-async def cmd_admin(message: Message, state: FSMContext):
-    """Админ-панель через команду"""
-    try:
-        if not await is_admin(message.from_user.id):
-            await message.answer("❌ У вас нет прав администратора")
-            return
-
-        await state.clear()
-
-        # Удаляем команду пользователя
-        try:
-            await message.delete()
-        except:
-            pass
-
-        admin_text = """
-🛡️ **АДМИН-ПАНЕЛЬ**
-336 инженерно-маскировочный батальон
-
-🎯 Система управления электронным табелем
-⚡ Выберите раздел для работы:
-        """
-
-        await message.answer(
-            admin_text,
-            reply_markup=get_admin_main_keyboard(await is_main_admin(message.from_user.id)),
-            parse_mode='Markdown'
-        )
-    except Exception as e:
-        logging.error(f"Ошибка в cmd_admin: {e}")
-        await message.answer("❌ Произошла ошибка. Попробуйте позже.")
-
-@router.callback_query(F.data == "admin_panel")
-async def callback_admin_panel(callback: CallbackQuery, state: FSMContext):
-    """Главная админ-панель"""
-    try:
-        if not await is_admin(callback.from_user.id):
-            await callback.answer("❌ У вас нет прав администратора", show_alert=True)
-            return
-
-        await state.clear()
-
-        # Получаем статистику для превью
-        users = await DatabaseService.get_all_users()
-        soldiers = [u for u in users if not u.get('is_admin', False)]
-        admins = [u for u in users if u.get('is_admin', False)]
-
-        # Подсчет статуса
-        present = 0
-        absent = 0
-        for soldier in soldiers:
-            records = await DBService.get_user_records(soldier['id'], 1)
-            if records and records[0]['action'] == 'прибыл':
-                present += 1
-            else:
-                absent += 1
-
-        # Статистика за сегодня
-        today = datetime.now(KALININGRAD_TZ).date()
-        today_records = await DBService.get_records_by_date(today)
-
-        admin_text = f"""
-🛡️ **АДМИН-ПАНЕЛЬ**
-🏛️ *Рота "В"*
-
-━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 **ОПЕРАТИВНАЯ СВОДКА**
-━━━━━━━━━━━━━━━━━━━━━━━━━
-
-👥 **Личный состав:** {len(soldiers)} чел.
-┣ 🏠 На месте: **{present}** чел.
-┗ 🚶 Убыли: **{absent}** чел.
-
-👨‍💼 **Администраторов:** {len(admins)} чел.
-
-📝 **Активность за сегодня:** {len(today_records)} записей
-
-🕐 **Время обновления:** {datetime.now(KALININGRAD_TZ).strftime('%H:%M')}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━
-⚡ **СИСТЕМА УПРАВЛЕНИЯ**
-        """
-
-        await callback.message.edit_text(
-            admin_text,
-            reply_markup=get_admin_main_keyboard(await is_main_admin(callback.from_user.id)),
-            parse_mode='Markdown'
-        )
-        await callback.answer()
-    except Exception as e:
-        logging.error(f"Ошибка в callback_admin_panel: {e}")
-        await callback.answer("❌ Произошла ошибка")
-
-@router.callback_query(F.data == "admin_personnel")
-async def callback_admin_personnel(callback: CallbackQuery):
-    """Управление личным составом"""
-    try:
-        if not await is_admin(callback.from_user.id):
-            await callback.answer("❌ У вас нет прав", show_alert=True)
-            return
-
-        users = await DatabaseService.get_all_users()
-        soldiers = [u for u in users if not u.get('is_admin', False)]
-        admins = [u for u in users if u.get('is_admin', False)]
-
-        text = f"""
-👥 **УПРАВЛЕНИЕ ЛИЧНЫМ СОСТАВОМ**
-
-📊 **Сводка:**
-• 👨‍💼 Администраторов: {len(admins)}
-• 🪖 Личный состав: {len(soldiers)}
-• 📝 Всего пользователей: {len(users)}
-
-⚙️ Выберите действие:
-        """
-
-        await callback.message.edit_text(
-            text,
-            reply_markup=get_personnel_keyboard(),
-            parse_mode='Markdown'
-        )
-        await callback.answer()
-    except Exception as e:
-        logging.error(f"Ошибка в callback_admin_personnel: {e}")
-        await callback.answer("❌ Ошибка")
-
-@router.callback_query(F.data == "personnel_list")
-async def callback_personnel_list(callback: CallbackQuery):
-    """Список личного состава"""
-    try:
-        if not await is_admin(callback.from_user.id):
-            await callback.answer("❌ У вас нет прав", show_alert=True)
-            return
-
-        users = await DatabaseService.get_all_users()
-        soldiers = sorted([u for u in users if not u.get('is_admin', False)], 
-                         key=lambda x: x['full_name'])
-
-        if not soldiers:
-            text = "👥 **ЛИЧНЫЙ СОСТАВ**\n\n❌ Личный состав пуст"
-        else:
-            text = f"👥 **ЛИЧНЫЙ СОСТАВ** ({len(soldiers)} чел.)\n\n"
-
-            # Разбиваем на две колонки для компактности
-            for i in range(0, len(soldiers), 2):
-                left = soldiers[i]
-                right = soldiers[i + 1] if i + 1 < len(soldiers) else None
-
-                # Получаем последний статус
-                records = await DBService.get_user_records(left['id'], 1)
-                left_status = "🏠" if records and records[0]['action'] == 'прибыл' else "🚶"
-
-                line = f"{left_status} {left['full_name']}"
-
-                if right:
-                    right_records = await DBService.get_user_records(right['id'], 1)
-                    right_status = "🏠" if right_records and right_records[0]['action'] == 'прибыл' else "🚶"
-                    line += f"  |  {right_status} {right['full_name']}"
-
-                text += line + "\n"
-
-        await callback.message.edit_text(
-            text,
-            reply_markup=get_back_keyboard("admin_personnel"),
-            parse_mode='Markdown'
-        )
-        await callback.answer()
-    except Exception as e:
-        logging.error(f"Ошибка в callback_personnel_list: {e}")
-        await callback.answer("❌ Ошибка")
-
-@router.callback_query(F.data == "personnel_status")
-async def callback_personnel_status(callback: CallbackQuery):
-    """Статус личного состава"""
-    try:
-        if not await is_admin(callback.from_user.id):
-            await callback.answer("❌ У вас нет прав", show_alert=True)
-            return
-
-        # Получаем текущий текст сообщения для сравнения
-        current_text = callback.message.text or ""
-
-        text = f"""
-📊 **СТАТУС ЛИЧНОГО СОСТАВА**
-
-⚙️ Выберите действие:
-        """
-
-        # Проверяем, отличается ли новый текст от текущего
-        if current_text.strip() != text.strip():
-            await callback.message.edit_text(
-                text,
-                reply_markup=get_status_keyboard(),
-                parse_mode='Markdown'
-            )
-        else:
-            # Если текст одинаковый, просто обновляем клавиатуру
-            try:
-                await callback.message.edit_reply_markup(
-                    reply_markup=get_status_keyboard()
-                )
-            except:
-                pass  # Игнорируем ошибку если клавиатура тоже одинаковая
-
-        await callback.answer()
-    except Exception as e:
-        if "message is not modified" not in str(e):
-            logging.error(f"Ошибка в callback_personnel_status: {e}")
-        await callback.answer()
-
-@router.callback_query(F.data.startswith("status_"))
-async def callback_status_display(callback: CallbackQuery):
-    """Отображение статуса"""
-    try:
-        if not await is_admin(callback.from_user.id):
-            await callback.answer("❌ У вас нет прав", show_alert=True)
-            return
-
-        status_type = callback.data.split("_")[1]  # all, present, absent
-
-        users = await DatabaseService.get_all_users()
-        soldiers = sorted([u for u in users if not u.get('is_admin', False)], 
-                         key=lambda x: x['full_name'])
-
-        present = []
-        absent = []
-
-        for soldier in soldiers:
-            records = await DBService.get_user_records(soldier['id'], 1)
-            if records and records[0]['action'] == 'прибыл':
-                present.append((soldier, records[0]))
-            else:
-                absent.append((soldier, records[0] if records else None))
-
-        if status_type == "all":
-            text = f"""
-📊 **СТАТУС ВСЕХ** ({len(soldiers)} чел.)
-
-🏠 **НА МЕСТЕ** ({len(present)} чел.):
-"""
-            for soldier, record in present:
-                time_str = format_kaliningrad_time(record['timestamp']) if record else "—"
-                location = record['location'] if record else "—"
-                text += f"• {soldier['full_name']} ({time_str}, {location})\n"
-
-            text += f"\n🚶 **УБЫЛИ** ({len(absent)} чел.):\n"
-            for soldier, record in absent:
-                time_str = format_kaliningrad_time(record['timestamp']) if record else "—"
-                location = record['location'] if record else "—"
-                text += f"• {soldier['full_name']} ({time_str}, {location})\n"
-
-        elif status_type == "present":
-            text = f"🏠 **НА МЕСТЕ** ({len(present)} чел.):\n\n"
-            for soldier, record in present:
-                time_str = format_kaliningrad_time(record['timestamp']) if record else "—"
-                location = record['location'] if record else "—"
-                text += f"• {soldier['full_name']}\n  📍 {location}\n  ⏰ {time_str}\n\n"
-
-        else:  # absent
-            text = f"🚶 **УБЫЛИ** ({len(absent)} чел.):\n\n"
-            for soldier, record in absent:
-                time_str = format_kaliningrad_time(record['timestamp']) if record else "—"
-                location = record['location'] if record else "—"
-                text += f"• {soldier['full_name']}\n  📍 {location}\n  ⏰ {time_str}\n\n"
-
-        await callback.message.edit_text(
-            text,
-            reply_markup=get_back_keyboard("personnel_status"),
-            parse_mode='Markdown'
-        )
-        await callback.answer()
-    except Exception as e:
-        logging.error(f"Ошибка в callback_status_display: {e}")
-        await callback.answer("❌ Ошибка")
-
-@router.callback_query(F.data == "personnel_delete")
-async def callback_personnel_delete(callback: CallbackQuery, state: FSMContext):
-    """Удаление бойца"""
-    try:
-        if not await is_main_admin(callback.from_user.id):
-            await callback.answer("❌ Доступно только главному админу", show_alert=True)
-            return
-
-        users = await DatabaseService.get_all_users()
-        soldiers = sorted([u for u in users if not u.get('is_admin', False)], 
-                         key=lambda x: x['full_name'])
-
-        if not soldiers:
-            await callback.answer("❌ Нет бойцов для удаления", show_alert=True)
-            return
-
-        text = """
-❌ **УДАЛЕНИЕ БОЙЦА**
-
-⚠️ **ВНИМАНИЕ!** Это действие необратимо!
-Будут удалены все записи бойца.
-
-📝 Введите **точную фамилию** бойца для удаления:
-
-📋 **Доступные бойцы:**
-"""
-
-        for soldier in soldiers:
-            text += f"• {soldier['full_name']}\n"
-
-        await state.set_state(AdminStates.waiting_for_user_delete)
-        await callback.message.edit_text(
-            text,
-            reply_markup=get_back_keyboard("admin_personnel"),
-            parse_mode='Markdown'
-        )
-        await callback.answer()
-    except Exception as e:
-        logging.error(f"Ошибка в callback_personnel_delete: {e}")
-        await callback.answer("❌ Ошибка")
-
-@router.message(AdminStates.waiting_for_user_delete)
-async def process_user_delete(message: Message, state: FSMContext):
-    """Обработка удаления пользователя"""
-    try:
-        name_to_delete = message.text.strip()
-
-        # Удаляем сообщение пользователя
-        try:
-            await message.delete()
-        except:
-            pass
-
-        # Ищем пользователя
-        users = await DatabaseService.get_all_users()
-        target_user = None
-
-        for user in users:
-            if user['full_name'] == name_to_delete and not user.get('is_admin', False):
-                target_user = user
-                break
-
-        if not target_user:
-            await message.answer(
-                f"❌ Боец с именем '{name_to_delete}' не найден!\n\nВведите точную фамилию:",
-                reply_markup=get_back_keyboard("admin_personnel")
-            )
-            return
-
-        # Просим подтверждение
-        await state.update_data(user_to_delete=target_user['id'])
-        await state.set_state(AdminStates.waiting_for_confirmation)
-
-        confirm_text = f"""
-⚠️ **ПОДТВЕРЖДЕНИЕ УДАЛЕНИЯ**
-
-👤 **Боец:** {target_user['full_name']}
-🆔 **ID:** {target_user['id']}
-
-❗ **Это действие НЕОБРАТИМО!**
-Будут удалены ВСЕ записи этого бойца.
-
-🔴 Для подтверждения введите: **ДА**
-        """
-
-        await message.answer(
-            confirm_text,
-            reply_markup=get_back_keyboard("admin_personnel"),
-            parse_mode='Markdown'
-        )
-    except Exception as e:
-        logging.error(f"Ошибка в process_user_delete: {e}")
-        await message.answer("❌ Произошла ошибка")
-
-@router.message(AdminStates.waiting_for_confirmation)
-async def process_confirmation(message: Message, state: FSMContext):
-    """Обработка подтверждения удаления"""
-    try:
-        confirmation = message.text.strip().upper()
-
-        # Удаляем сообщение пользователя
-        try:
-            await message.delete()
-        except:
-            pass
-
-        if confirmation != "ДА":
-            await message.answer(
-                "❌ Удаление отменено.\n\nДля подтверждения нужно ввести: **ДА**",
-                reply_markup=get_back_keyboard("admin_personnel"),
-                parse_mode='Markdown'
-            )
-            return
-
-        # Получаем данные из состояния
-        data = await state.get_data()
-        user_id = data.get('user_to_delete')
-
-        if not user_id:
-            await message.answer(
-                "❌ Ошибка: пользователь не найден",
-                reply_markup=get_back_keyboard("admin_personnel")
-            )
-            await state.clear()
-            return
-
-        # Удаляем пользователя
-        success = await DBService.delete_user(user_id)
-
-        if success:
-            await message.answer(
-                "✅ **Боец успешно удален!**\n\nВсе его записи также удалены из системы.",
-                reply_markup=get_back_keyboard("admin_personnel"),
-                parse_mode='Markdown'
-            )
-        else:
-            await message.answer(
-                "❌ Ошибка при удалении бойца",
-                reply_markup=get_back_keyboard("admin_personnel")
-            )
-
-        await state.clear()
-    except Exception as e:
-        logging.error(f"Ошибка в process_confirmation: {e}")
-        await message.answer("❌ Произошла ошибка")
-        await state.clear()
-
-@router.callback_query(F.data == "admin_manage")
-async def callback_admin_manage(callback: CallbackQuery):
-    """Управление администраторами"""
-    try:
-        if not await is_main_admin(callback.from_user.id):
-            await callback.answer("❌ Доступно только главному админу", show_alert=True)
-            return
-
-        admins = await DBService.get_all_admins()
-
-        text = f"""
-👑 **УПРАВЛЕНИЕ АДМИНИСТРАТОРАМИ**
-
-📊 **Текущие администраторы:** {len(admins)}
-
-"""
-
-        for admin in admins:
-            role = "👑 Главный" if admin['id'] == MAIN_ADMIN_ID else "🛡️ Админ"
-            text += f"• {role} {admin['full_name']}\n"
-
-        text += "\n⚙️ Выберите действие:"
-
-        await callback.message.edit_text(
-            text,
-            reply_markup=get_admin_manage_keyboard(),
-            parse_mode='Markdown'
-        )
-        await callback.answer()
-    except Exception as e:
-        logging.error(f"Ошибка в callback_admin_manage: {e}")
-        await callback.answer("❌ Ошибка")
-
-@router.callback_query(F.data == "add_admin")
-async def callback_add_admin(callback: CallbackQuery, state: FSMContext):
-    """Добавление администратора"""
-    try:
-        if not await is_main_admin(callback.from_user.id):
-            await callback.answer("❌ Доступно только главному админу", show_alert=True)
-            return
-
-        users = await DatabaseService.get_all_users()
-        soldiers = [u for u in users if not u.get('is_admin', False)]
-
-        if not soldiers:
-            await callback.answer("❌ Нет доступных пользователей", show_alert=True)
-            return
-
-        text = """
-➕ **ДОБАВЛЕНИЕ АДМИНИСТРАТОРА**
-
-📝 Введите **Telegram ID** пользователя:
-
-💡 **Как узнать ID:**
-1. Попросите пользователя написать боту /start
-2. Найдите его ID в списке ниже
-
-📋 **Доступные пользователи:**
-"""
-
-        for soldier in sorted(soldiers, key=lambda x: x['full_name']):
-            text += f"• {soldier['full_name']} (ID: `{soldier['id']}`)\n"
-
-        await state.set_state(AdminStates.waiting_for_admin_id)
-        await callback.message.edit_text(
-            text,
-            reply_markup=get_back_keyboard("admin_manage"),
-            parse_mode='Markdown'
-        )
-        await callback.answer()
-    except Exception as e:
-        logging.error(f"Ошибка в callback_add_admin: {e}")
-        await callback.answer("❌ Ошибка")
-
-@router.message(AdminStates.waiting_for_admin_id)
-async def process_admin_id(message: Message, state: FSMContext):
-    """Обработка добавления админа"""
-    try:
-        # Удаляем сообщение пользователя
-        try:
-            await message.delete()
-        except:
-            pass
-
-        try:
-            admin_id = int(message.text.strip())
-        except ValueError:
-            await message.answer(
-                "❌ Неверный формат ID!\n\nВведите числовой ID:",
-                reply_markup=get_back_keyboard("admin_manage")
-            )
-            return
-
-        # Проверяем существование пользователя
-        user = await DBService.get_user(admin_id)
-        if not user:
-            await message.answer(
-                f"❌ Пользователь с ID {admin_id} не найден!\n\nПроверьте ID:",
-                reply_markup=get_back_keyboard("admin_manage")
-            )
-            return
-
-        # Проверяем, не админ ли уже
-        if user.get('is_admin', False):
-            await message.answer(
-                f"❌ {user['full_name']} уже является администратором!",
-                reply_markup=get_back_keyboard("admin_manage")
-            )
-            await state.clear()
-            return
-
-        # Добавляем права админа
-        success = await DBService.set_admin_status(admin_id, True)
-
-        if success:
-            await message.answer(
-                f"✅ **{user['full_name']}** назначен администратором!",
-                reply_markup=get_back_keyboard("admin_manage"),
-                parse_mode='Markdown'
-            )
-
-            # Уведомляем нового админа
-            try:
-                from main import bot
-                await bot.send_message(
-                    admin_id,
-                    "🎉 **Поздравляем!**\n\nВам предоставлены права администратора в системе электронного табеля.",
-                    parse_mode='Markdown'
-                )
-            except:
-                pass
-        else:
-            await message.answer(
-                "❌ Ошибка при назначении администратора",
-                reply_markup=get_back_keyboard("admin_manage")
-            )
-
-        await state.clear()
-    except Exception as e:
-        logging.error(f"Ошибка в process_admin_id: {e}")
-        await message.answer("❌ Произошла ошибка")
-        await state.clear()
+        logging.error(f"Ошибка в admin_summary: {e}")
+        await callback.answer("❌ Ошибка получения данных", show_alert=True)
 
 @router.callback_query(F.data == "admin_journal")
 async def callback_admin_journal(callback: CallbackQuery):
-    """Журнал событий"""
+    """Показать журнал событий"""
+    user_id = callback.from_user.id
+
+    if not await is_admin(user_id):
+        await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+        return
+
     try:
-        if not await is_admin(callback.from_user.id):
-            await callback.answer("❌ У вас нет прав", show_alert=True)
-            return
-
-        stats = await DBService.get_statistics()
-
-        text = f"""
-📖 **ЖУРНАЛ СОБЫТИЙ**
-
-📊 **Статистика:**
-• 📝 Всего записей: {stats.get('records', 0)}
-• 👥 Пользователей: {stats.get('users', 0)}
-• 🕐 За сегодня: {stats.get('today_records', 0)}
-
-⚙️ Выберите действие:
-        """
-
-        await callback.message.edit_text(
-            text,
-            reply_markup=get_journal_keyboard(),
-            parse_mode='Markdown'
-        )
-        await callback.answer()
-    except Exception as e:
-        logging.error(f"Ошибка в callback_admin_journal: {e}")
-        await callback.answer("❌ Ошибка")
-
-@router.callback_query(F.data == "journal_view")
-async def callback_journal_view(callback: CallbackQuery):
-    """Просмотр журнала"""
-    try:
-        if not await is_admin(callback.from_user.id):
-            await callback.answer("❌ У вас нет прав", show_alert=True)
-            return
-
-        records = await DBService.get_all_records_with_names(20)
+        records = db.get_all_records(days=7, limit=10)
 
         if not records:
-            text = "📖 **ЖУРНАЛ СОБЫТИЙ**\n\n❌ Записей нет"
+            text = "📋 Записей за последнюю неделю не найдено."
         else:
-            text = f"📖 **ЖУРНАЛ СОБЫТИЙ** (последние 20)\n\n"
-
-            # Сортируем по алфавиту ФИО
-            records_sorted = sorted(records, key=lambda x: x['full_name'])
-
-            for record in records_sorted[:20]:
-                action_emoji = "🏠" if record['action'] == 'прибыл' else "🚶"
-                time_str = format_kaliningrad_time(record['timestamp'])
-
-                text += f"{action_emoji} **{record['full_name']}**\n"
-                text += f"   📍 {record['action']} - {record['location']}\n"
-                text += f"   ⏰ {time_str}\n\n"
+            text = "📋 Журнал событий (последние 10 записей за неделю):\n\n"
+            for record in records:
+                timestamp = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
+                formatted_time = timestamp.strftime('%d.%m %H:%M')
+                action_emoji = "🚶" if record['action'] == "убыл" else "🏠"
+                text += f"👤 {record['full_name']}\n"
+                text += f"{action_emoji} {record['action']} - {record['location']}\n"
+                text += f"⏰ {formatted_time}\n\n"
 
         await callback.message.edit_text(
             text,
-            reply_markup=get_back_keyboard("admin_journal"),
-            parse_mode='Markdown'
+            reply_markup=get_back_keyboard("admin_panel")
         )
         await callback.answer()
     except Exception as e:
-        logging.error(f"Ошибка в callback_journal_view: {e}")
-        await callback.answer("❌ Ошибка")
+        logging.error(f"Ошибка в admin_journal: {e}")
+        await callback.answer("❌ Ошибка получения данных", show_alert=True)
 
-@router.callback_query(F.data == "journal_export")
-async def callback_journal_export(callback: CallbackQuery, state: FSMContext):
-    """Экспорт журнала"""
+@router.callback_query(F.data == "admin_export")
+async def callback_admin_export(callback: CallbackQuery):
+    """Экспорт данных"""
+    user_id = callback.from_user.id
+
+    if not await is_admin(user_id):
+        await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+        return
+
     try:
-        if not await is_admin(callback.from_user.id):
-            await callback.answer("❌ У вас нет прав", show_alert=True)
-            return
-
-        await callback.answer("📤 Создание файла...", show_alert=True)
-
-        # Получаем все записи с именами
-        records = await DBService.get_all_records_with_names(1000)
-
-        if not records:
-            await callback.message.edit_text(
-                "❌ **Нет данных для экспорта**",
-                reply_markup=get_back_keyboard("admin_journal"),
-                parse_mode='Markdown'
-            )
-            return
-
-        # Создаем Excel файл
-        excel_file = await create_excel_export(records)
-
-        if excel_file:
+        filename = db.export_to_excel(days=30)
+        if filename:
             # Отправляем файл
-            file = FSInputFile(excel_file, filename=f"journal_{datetime.now().strftime('%d_%m_%Y')}.xlsx")
-
+            from aiogram.types import FSInputFile
+            document = FSInputFile(filename, filename="military_records.xlsx")
             await callback.message.answer_document(
-                file,
-                caption=f"📊 **Журнал табеля выхода в город**\n\n📅 Дата: {datetime.now(KALININGRAD_TZ).strftime('%d.%m.%Y %H:%M')}\n📝 Записей: {len(records)}\n🏛️ 336 инженерно-маскировочный батальон",
-                parse_mode='Markdown'
+                document,
+                caption="📤 Экспорт данных за последние 30 дней"
             )
-
-            # Удаляем временный файл
-            try:
-                os.remove(excel_file)
-            except:
-                pass
-
-            await callback.message.edit_text(
-                "✅ **Журнал успешно экспортирован!**",
-                reply_markup=get_back_keyboard("admin_journal"),
-                parse_mode='Markdown'
-            )
+            await callback.answer("✅ Файл отправлен")
         else:
-            await callback.message.edit_text(
-                "❌ **Ошибка создания файла**",
-                reply_markup=get_back_keyboard("admin_journal"),
-                parse_mode='Markdown'
-            )
+            await callback.answer("❌ Нет данных для экспорта", show_alert=True)
     except Exception as e:
-        logging.error(f"Ошибка в callback_journal_export: {e}")
-        await callback.answer("❌ Ошибка экспорта")
+        logging.error(f"Ошибка экспорта: {e}")
+        await callback.answer("❌ Ошибка при экспорте", show_alert=True)
 
-async def create_excel_export(records):
-    """Создание Excel файла с красивым оформлением"""
+@router.callback_query(F.data == "admin_manage")
+async def callback_admin_manage(callback: CallbackQuery):
+    """Управление админами (только для главного админа)"""
+    user_id = callback.from_user.id
+
+    if user_id != MAIN_ADMIN_ID:
+        await callback.answer("❌ Доступно только главному администратору", show_alert=True)
+        return
+
+    keyboard = [
+        [InlineKeyboardButton(text="➕ Добавить админа", callback_data="admin_add")],
+        [InlineKeyboardButton(text="➖ Удалить админа", callback_data="admin_remove")],
+        [InlineKeyboardButton(text="📋 Список админов", callback_data="admin_list")],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_panel")]
+    ]
+
+    await callback.message.edit_text(
+        "👥 Управление администраторами\n\nВыберите действие:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
+
+@router.callback_query(F.data == "admin_add")
+async def callback_admin_add(callback: CallbackQuery, state: FSMContext):
+    """Добавить админа"""
+    user_id = callback.from_user.id
+
+    if user_id != MAIN_ADMIN_ID:
+        await callback.answer("❌ Доступно только главному администратору", show_alert=True)
+        return
+
+    await state.set_state(AdminStates.waiting_for_admin_id)
+    await callback.message.edit_text(
+        "➕ Добавление администратора\n\n"
+        "Для добавления нового админа:\n"
+        "1. Попросите пользователя отправить боту /start\n"
+        "2. Введите его Telegram ID\n\n"
+        "Введите ID пользователя:",
+        reply_markup=get_back_keyboard("admin_manage")
+    )
+    await callback.answer()
+
+@router.message(AdminStates.waiting_for_admin_id)
+async def handle_admin_id_input(message: Message, state: FSMContext):
+    """Обработка ввода ID админа"""
+    admin_id_text = message.text.strip()
+
     try:
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Журнал выходов"
+        admin_id = int(admin_id_text)
+    except ValueError:
+        await message.answer(
+            "❌ Неверный формат ID!\n"
+            "ID должен быть числом.\n"
+            "Попробуйте еще раз:"
+        )
+        return
 
-        # Заголовки
-        headers = ['№', 'ФИО', 'Действие', 'Локация', 'Дата', 'Время']
-        ws.append(headers)
+    # Проверяем, существует ли пользователь
+    target_user = db.get_user(admin_id)
+    if not target_user:
+        await message.answer(
+            "❌ Пользователь с таким ID не найден!\n"
+            "Убедитесь, что пользователь уже зарегистрирован в боте.\n"
+            "Попробуйте еще раз:"
+        )
+        return
 
-        # Стиль заголовков
-        header_font = Font(bold=True, color="FFFFFF")
-        header_fill = PatternFill(start_color="2E86AB", end_color="2E86AB", fill_type="solid")
-        header_alignment = Alignment(horizontal="center", vertical="center")
+    # Проверяем, не является ли уже админом
+    if db.is_admin(admin_id):
+        await message.answer(f"❌ Пользователь {target_user['full_name']} уже является администратором!")
+        await state.clear()
+        return
 
-        for col in range(1, len(headers) + 1):
-            cell = ws.cell(row=1, column=col)
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.alignment = header_alignment
+    # Добавляем админа
+    if db.add_admin(admin_id):
+        await state.clear()
+        await message.answer(f"✅ Администратор {target_user['full_name']} успешно добавлен!")
+    else:
+        await message.answer("❌ Ошибка при добавлении администратора. Попробуйте еще раз.")
 
-        # Данные
-        arrive_fill = PatternFill(start_color="C8E6C9", end_color="C8E6C9", fill_type="solid")  # Зеленый
-        leave_fill = PatternFill(start_color="FFCDD2", end_color="FFCDD2", fill_type="solid")   # Красный
+@router.callback_query(F.data == "admin_list")
+async def callback_admin_list(callback: CallbackQuery):
+    """Показать список админов"""
+    user_id = callback.from_user.id
 
-        # Сортируем записи по ФИО
-        sorted_records = sorted(records, key=lambda x: (x['full_name'], x['timestamp']))
+    if user_id != MAIN_ADMIN_ID:
+        await callback.answer("❌ Доступно только главному администратору", show_alert=True)
+        return
 
-        for idx, record in enumerate(sorted_records, 1):
-            dt = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
-                        kld_time = dt.astimezone(KALININGRAD_TZ)
+    try:
+        admins = db.get_all_admins()
 
-            row_data = [
-                idx,
-                record['full_name'],
-                record['action'],
-                record['location'],
-                kld_time.strftime('%d.%m.%Y'),
-                kld_time.strftime('%H:%M')
-            ]
+        if not admins:
+            text = "👥 Администраторы не найдены."
+        else:
+            text = "👥 Список администраторов:\n\n"
+            for admin in admins:
+                status = "👑 Главный" if admin['id'] == MAIN_ADMIN_ID else "⚙️ Админ"
+                text += f"{status} {admin['full_name']}\n"
+                text += f"ID: {admin['id']}\n"
+                text += f"Username: @{admin['username']}\n\n"
 
-            ws.append(row_data)
-
-            # Применяем цветовую заливку
-            fill = arrive_fill if record['action'] == 'прибыл' else leave_fill
-            for col in range(1, len(row_data) + 1):
-                ws.cell(row=idx + 1, column=col).fill = fill
-
-        # Настройка ширины колонок
-        ws.column_dimensions['A'].width = 5
-        ws.column_dimensions['B'].width = 25
-        ws.column_dimensions['C'].width = 12
-        ws.column_dimensions['D'].width = 20
-        ws.column_dimensions['E'].width = 12
-        ws.column_dimensions['F'].width = 8
-
-        # Добавляем заголовок документа
-        ws.insert_rows(1)
-        ws.merge_cells('A1:F1')
-        title_cell = ws['A1']
-        title_cell.value = f"ЖУРНАЛ ВЫХОДА В ГОРОД - Рота \"В\" ({datetime.now(KALININGRAD_TZ).strftime('%d.%m.%Y')})"
-        title_cell.font = Font(bold=True, size=14)
-        title_cell.alignment = Alignment(horizontal="center")
-
-        # Сохраняем файл
-        filename = f"journal_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        wb.save(filename)
-
-        return filename
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_back_keyboard("admin_manage")
+        )
+        await callback.answer()
     except Exception as e:
-        logging.error(f"Ошибка создания Excel: {e}")
-        return None
+        logging.error(f"Ошибка в admin_list: {e}")
+        await callback.answer("❌ Ошибка получения данных", show_alert=True)
+
+# Команда для прямого доступа к админ-панели
+@router.message(Command("admin"))
+async def cmd_admin(message: Message):
+    """Команда /admin"""
+    user_id = message.from_user.id
+
+    if not await is_admin(user_id):
+        await message.answer("❌ У вас нет прав администратора")
+        return
+
+    is_main_admin = user_id == MAIN_ADMIN_ID
+    await message.answer(
+        "⚙️ Панель администратора\n\nВыберите действие:",
+        reply_markup=get_admin_panel_keyboard(is_main_admin)
+    )

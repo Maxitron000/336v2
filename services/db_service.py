@@ -1,38 +1,34 @@
 
 import sqlite3
-import json
+import logging
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 import pandas as pd
 import os
 
 class DatabaseService:
-    def __init__(self, db_name='military_tracker.db'):
-        self.db_name = db_name
-        self.init_database()
-
-    def init_database(self):
+    def __init__(self, db_path: str = "military_tracker.db"):
+        self.db_path = db_path
+        self.init_db()
+    
+    def init_db(self):
         """Инициализация базы данных"""
         try:
-            with sqlite3.connect(self.db_name) as conn:
-                cursor = conn.cursor()
-                
-                # Таблица пользователей
-                cursor.execute('''
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute('''
                     CREATE TABLE IF NOT EXISTS users (
                         id INTEGER PRIMARY KEY,
-                        username TEXT,
-                        full_name TEXT,
+                        username TEXT NOT NULL,
+                        full_name TEXT NOT NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        is_admin BOOLEAN DEFAULT FALSE
                     )
                 ''')
                 
-                # Таблица записей
-                cursor.execute('''
+                conn.execute('''
                     CREATE TABLE IF NOT EXISTS records (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id INTEGER,
+                        user_id INTEGER NOT NULL,
                         action TEXT NOT NULL,
                         location TEXT NOT NULL,
                         timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -40,165 +36,241 @@ class DatabaseService:
                     )
                 ''')
                 
-                # Таблица админов
-                cursor.execute('''
+                conn.execute('''
                     CREATE TABLE IF NOT EXISTS admins (
                         user_id INTEGER PRIMARY KEY,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (user_id) REFERENCES users (id)
                     )
                 ''')
                 
+                # Создаем индексы для улучшения производительности
+                conn.execute('CREATE INDEX IF NOT EXISTS idx_records_user_id ON records (user_id)')
+                conn.execute('CREATE INDEX IF NOT EXISTS idx_records_timestamp ON records (timestamp)')
+                
                 conn.commit()
-                print("✅ База данных инициализирована")
+                logging.info("✅ База данных инициализирована")
         except Exception as e:
-            print(f"❌ Ошибка инициализации БД: {e}")
-
+            logging.error(f"Ошибка инициализации БД: {e}")
+    
     def add_user(self, user_id: int, username: str, full_name: str) -> bool:
-        """Добавление пользователя"""
+        """Добавить пользователя"""
         try:
-            with sqlite3.connect(self.db_name) as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    INSERT OR REPLACE INTO users (id, username, full_name, last_activity)
-                    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-                ''', (user_id, username, full_name))
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    'INSERT OR REPLACE INTO users (id, username, full_name) VALUES (?, ?, ?)',
+                    (user_id, username, full_name)
+                )
                 conn.commit()
                 return True
         except Exception as e:
-            print(f"Ошибка добавления пользователя: {e}")
+            logging.error(f"Ошибка добавления пользователя: {e}")
             return False
-
-    def get_user(self, user_id: int) -> Optional[Dict]:
-        """Получение пользователя"""
+    
+    def get_user(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Получить пользователя"""
         try:
-            with sqlite3.connect(self.db_name) as conn:
-                cursor = conn.cursor()
-                cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute(
+                    'SELECT * FROM users WHERE id = ?',
+                    (user_id,)
+                )
                 row = cursor.fetchone()
-                if row:
-                    return {
-                        'id': row[0],
-                        'username': row[1], 
-                        'full_name': row[2],
-                        'created_at': row[3],
-                        'last_activity': row[4]
-                    }
-                return None
+                return dict(row) if row else None
         except Exception as e:
-            print(f"Ошибка получения пользователя: {e}")
+            logging.error(f"Ошибка получения пользователя: {e}")
             return None
-
+    
     def add_record(self, user_id: int, action: str, location: str) -> bool:
-        """Добавление записи"""
+        """Добавить запись"""
         try:
-            with sqlite3.connect(self.db_name) as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    INSERT INTO records (user_id, action, location)
-                    VALUES (?, ?, ?)
-                ''', (user_id, action, location))
-                
-                # Обновляем последнюю активность пользователя
-                cursor.execute('''
-                    UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = ?
-                ''', (user_id,))
-                
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    'INSERT INTO records (user_id, action, location) VALUES (?, ?, ?)',
+                    (user_id, action, location)
+                )
                 conn.commit()
                 return True
         except Exception as e:
-            print(f"Ошибка добавления записи: {e}")
+            logging.error(f"Ошибка добавления записи: {e}")
             return False
-
-    def get_user_records(self, user_id: int, limit: int = 10) -> List[Dict]:
-        """Получение записей пользователя"""
+    
+    def get_user_records(self, user_id: int, limit: int = 10) -> List[Dict[str, Any]]:
+        """Получить записи пользователя"""
         try:
-            with sqlite3.connect(self.db_name) as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    SELECT action, location, timestamp 
-                    FROM records 
-                    WHERE user_id = ? 
-                    ORDER BY timestamp DESC 
-                    LIMIT ?
-                ''', (user_id, limit))
-                
-                rows = cursor.fetchall()
-                return [
-                    {
-                        'action': row[0],
-                        'location': row[1], 
-                        'timestamp': row[2]
-                    }
-                    for row in rows
-                ]
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute(
+                    'SELECT * FROM records WHERE user_id = ? ORDER BY timestamp DESC LIMIT ?',
+                    (user_id, limit)
+                )
+                return [dict(row) for row in cursor.fetchall()]
         except Exception as e:
-            print(f"Ошибка получения записей: {e}")
+            logging.error(f"Ошибка получения записей пользователя: {e}")
             return []
-
-    def is_admin(self, user_id: int) -> bool:
-        """Проверка является ли пользователь админом"""
+    
+    def get_all_records(self, days: int = 7, limit: int = 100) -> List[Dict[str, Any]]:
+        """Получить все записи за период"""
         try:
-            with sqlite3.connect(self.db_name) as conn:
-                cursor = conn.cursor()
-                cursor.execute('SELECT 1 FROM admins WHERE user_id = ?', (user_id,))
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                since_date = datetime.now() - timedelta(days=days)
+                cursor = conn.execute('''
+                    SELECT r.*, u.full_name 
+                    FROM records r
+                    JOIN users u ON r.user_id = u.id
+                    WHERE r.timestamp > ?
+                    ORDER BY r.timestamp DESC
+                    LIMIT ?
+                ''', (since_date, limit))
+                return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            logging.error(f"Ошибка получения всех записей: {e}")
+            return []
+    
+    def get_current_status(self) -> Dict[str, Any]:
+        """Получить текущий статус всех пользователей"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                
+                # Получаем всех пользователей
+                users_cursor = conn.execute('SELECT id, full_name FROM users')
+                all_users = users_cursor.fetchall()
+                
+                # Получаем последние действия каждого пользователя
+                absent_list = []
+                present_count = 0
+                
+                for user in all_users:
+                    last_record_cursor = conn.execute('''
+                        SELECT action, location FROM records 
+                        WHERE user_id = ? 
+                        ORDER BY timestamp DESC 
+                        LIMIT 1
+                    ''', (user['id'],))
+                    last_record = last_record_cursor.fetchone()
+                    
+                    if last_record and last_record['action'] == 'убыл':
+                        absent_list.append({
+                            'name': user['full_name'],
+                            'location': last_record['location']
+                        })
+                    else:
+                        present_count += 1
+                
+                return {
+                    'total': len(all_users),
+                    'present': present_count,
+                    'absent': len(absent_list),
+                    'absent_list': absent_list
+                }
+        except Exception as e:
+            logging.error(f"Ошибка получения статуса: {e}")
+            return {'total': 0, 'present': 0, 'absent': 0, 'absent_list': []}
+    
+    def is_admin(self, user_id: int) -> bool:
+        """Проверить права администратора"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute(
+                    'SELECT 1 FROM admins WHERE user_id = ?',
+                    (user_id,)
+                )
                 return cursor.fetchone() is not None
         except Exception as e:
-            print(f"Ошибка проверки админа: {e}")
+            logging.error(f"Ошибка проверки прав админа: {e}")
             return False
-
+    
     def add_admin(self, user_id: int) -> bool:
-        """Добавление админа"""
+        """Добавить администратора"""
         try:
-            with sqlite3.connect(self.db_name) as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    INSERT OR IGNORE INTO admins (user_id) VALUES (?)
-                ''', (user_id,))
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    'INSERT OR IGNORE INTO admins (user_id) VALUES (?)',
+                    (user_id,)
+                )
                 conn.commit()
                 return True
         except Exception as e:
-            print(f"Ошибка добавления админа: {e}")
+            logging.error(f"Ошибка добавления админа: {e}")
             return False
-
-    def get_current_status(self):
-        """Получить текущий статус для веб-интерфейса"""
+    
+    def get_all_admins(self) -> List[Dict[str, Any]]:
+        """Получить всех админов"""
         try:
-            return {
-                'total': 10,
-                'present': 7,
-                'absent': 3,
-                'unknown': 0,
-                'present_list': [
-                    {'name': 'Иванов И.И.', 'last_update': '2025-01-17T10:30:00'},
-                    {'name': 'Петров П.П.', 'last_update': '2025-01-17T09:15:00'},
-                ],
-                'absent_list': [
-                    {'name': 'Сидоров С.С.', 'location': 'Отпуск', 'last_update': '2025-01-16T18:00:00'},
-                    {'name': 'Козлов К.К.', 'location': 'Командировка', 'last_update': '2025-01-16T16:30:00'},
-                ]
-            }
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute('''
+                    SELECT u.id, u.username, u.full_name, a.added_at
+                    FROM admins a
+                    JOIN users u ON a.user_id = u.id
+                    ORDER BY a.added_at
+                ''')
+                return [dict(row) for row in cursor.fetchall()]
         except Exception as e:
-            print(f"Ошибка получения статуса: {e}")
-            return {
-                'total': 0,
-                'present': 0,
-                'absent': 0,
-                'unknown': 0,
-                'present_list': [],
-                'absent_list': []
-            }
-
-    def execute_query(self, query: str, params=None):
-        """Выполнение SQL запроса"""
-        try:
-            with sqlite3.connect(self.db_name) as conn:
-                cursor = conn.cursor()
-                if params:
-                    cursor.execute(query, params)
-                else:
-                    cursor.execute(query)
-                return cursor.fetchall()
-        except Exception as e:
-            print(f"Ошибка выполнения запроса: {e}")
+            logging.error(f"Ошибка получения админов: {e}")
             return []
+    
+    def get_all_users(self) -> List[Dict[str, Any]]:
+        """Получить всех пользователей"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute('SELECT * FROM users ORDER BY full_name')
+                return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            logging.error(f"Ошибка получения пользователей: {e}")
+            return []
+    
+    def export_to_excel(self, days: int = 30) -> Optional[str]:
+        """Экспорт данных в Excel"""
+        try:
+            records = self.get_all_records(days=days, limit=10000)
+            
+            if not records:
+                return None
+            
+            # Создаем DataFrame
+            df = pd.DataFrame(records)
+            
+            # Форматируем данные
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df = df.sort_values('timestamp', ascending=False)
+            
+            # Переименовываем колонки
+            df = df.rename(columns={
+                'full_name': 'ФИО',
+                'action': 'Действие',
+                'location': 'Локация',
+                'timestamp': 'Время'
+            })
+            
+            # Выбираем нужные колонки
+            df = df[['ФИО', 'Действие', 'Локация', 'Время']]
+            
+            # Сохраняем в файл
+            filename = f"military_records_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            df.to_excel(filename, index=False, engine='openpyxl')
+            
+            return filename
+        except Exception as e:
+            logging.error(f"Ошибка экспорта в Excel: {e}")
+            return None
+    
+    def cleanup_old_records(self, days: int = 180) -> int:
+        """Очистка старых записей"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cutoff_date = datetime.now() - timedelta(days=days)
+                cursor = conn.execute(
+                    'DELETE FROM records WHERE timestamp < ?',
+                    (cutoff_date,)
+                )
+                deleted_count = cursor.rowcount
+                conn.commit()
+                return deleted_count
+        except Exception as e:
+            logging.error(f"Ошибка очистки записей: {e}")
+            return 0
