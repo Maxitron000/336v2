@@ -16,6 +16,7 @@ router = Router()
 class UserStates(StatesGroup):
     waiting_for_name = State()
     waiting_for_custom_location = State()
+    showing_duplicate_action_warning = State()
 
 # Инициализация базы данных
 db = DatabaseService()
@@ -289,10 +290,13 @@ async def handle_custom_location(message: Message, state: FSMContext):
         await message.answer("❌ Произошла ошибка. Попробуйте начать заново.")
 
 @router.callback_query(F.data == "main_menu")
-async def callback_main_menu(callback: CallbackQuery):
+async def callback_main_menu(callback: CallbackQuery, state: FSMContext):
     """Показать главное меню"""
     user_id = callback.from_user.id
     is_admin = db.is_admin(user_id) or user_id == MAIN_ADMIN_ID
+
+    # Очищаем состояние если оно было установлено
+    await state.clear()
 
     await callback.message.edit_text(
         "🎖️ Электронный табель выхода в город\n\nВыберите действие:",
@@ -301,7 +305,7 @@ async def callback_main_menu(callback: CallbackQuery):
     await callback.answer()
 
 @router.callback_query(F.data.startswith("action_"))
-async def callback_action_selection(callback: CallbackQuery):
+async def callback_action_selection(callback: CallbackQuery, state: FSMContext):
     """Обработка выбора действия"""
     try:
         user_id = callback.from_user.id
@@ -319,17 +323,24 @@ async def callback_action_selection(callback: CallbackQuery):
             # Проверяем последнее действие пользователя
             last_records = db.get_user_records(user_id, 1)
             if last_records and last_records[0]['action'] == "в части":
+                await state.set_state(UserStates.showing_duplicate_action_warning)
+                last_time = datetime.fromisoformat(last_records[0]['timestamp'].replace('Z', '+00:00')).strftime('%d.%m.%Y в %H:%M')
+                
+                keyboard = [
+                    [InlineKeyboardButton(text="🔙 Понятно, вернуться в меню", callback_data="main_menu")]
+                ]
+                reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
+                
                 await callback.message.edit_text(
-                    "⚠️ Вы уже отмечены как находящийся в части!\n"
-                    f"📍 Локация: {last_records[0]['location']}\n"
-                    "⏰ Последняя отметка: " + datetime.fromisoformat(last_records[0]['timestamp'].replace('Z', '+00:00')).strftime('%d.%m.%Y %H:%M') + "\n\n"
-                    "❗ Сначала убыльте, а затем снова прибудьте."
-                )
-                await asyncio.sleep(3)
-                is_admin = db.is_admin(user_id) or user_id == MAIN_ADMIN_ID
-                await callback.message.edit_text(
-                    "🎖️ Электронный табель выхода в город\n\nВыберите действие:",
-                    reply_markup=get_main_menu_keyboard(is_admin)
+                    "⚠️ **Повторная отметка о прибытии**\n\n"
+                    "Вы уже отмечены как **находящийся в части**\n"
+                    f"📍 Текущая локация: **{last_records[0]['location']}**\n"
+                    f"⏰ Время отметки: {last_time}\n\n"
+                    "💡 **Что делать дальше:**\n"
+                    "1️⃣ Если хотите уйти — нажмите «❌ Убыл»\n"
+                    "2️⃣ Если ошиблись — просто вернитесь в меню",
+                    reply_markup=reply_markup,
+                    parse_mode="Markdown"
                 )
                 await callback.answer()
                 return
@@ -358,17 +369,25 @@ async def callback_action_selection(callback: CallbackQuery):
             # Проверяем последнее действие для "убыл"
             last_records = db.get_user_records(user_id, 1)
             if last_records and last_records[0]['action'] == "не в части":
+                await state.set_state(UserStates.showing_duplicate_action_warning)
+                last_time = datetime.fromisoformat(last_records[0]['timestamp'].replace('Z', '+00:00')).strftime('%d.%m.%Y в %H:%M')
+                
+                keyboard = [
+                    [InlineKeyboardButton(text="🔙 Понятно, вернуться в меню", callback_data="main_menu")]
+                ]
+                reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
+                
                 await callback.message.edit_text(
-                    "⚠️ Вы уже отмечены как отсутствующий!\n"
-                    f"📍 Текущая локация: {last_records[0]['location']}\n"
-                    "⏰ Последняя отметка: " + datetime.fromisoformat(last_records[0]['timestamp'].replace('Z', '+00:00')).strftime('%d.%m.%Y %H:%M') + "\n\n"
-                    "❗ Сначала прибудьте в часть, а затем снова убейте."
-                )
-                await asyncio.sleep(3)
-                is_admin = db.is_admin(user_id) or user_id == MAIN_ADMIN_ID
-                await callback.message.edit_text(
-                    "🎖️ Электронный табель выхода в город\n\nВыберите действие:",
-                    reply_markup=get_main_menu_keyboard(is_admin)
+                    "⚠️ **Повторная отметка об убытии**\n\n"
+                    "Вы уже отмечены как **отсутствующий**\n"
+                    f"📍 Текущая локация: **{last_records[0]['location']}**\n"
+                    f"⏰ Время отметки: {last_time}\n\n"
+                    "💡 **Что делать дальше:**\n"
+                    "1️⃣ Если вернулись — нажмите «✅ Прибыл»\n"
+                    "2️⃣ Если хотите сменить локацию — сначала прибудьте, затем убудьте заново\n"
+                    "3️⃣ Если ошиблись — просто вернитесь в меню",
+                    reply_markup=reply_markup,
+                    parse_mode="Markdown"
                 )
                 await callback.answer()
                 return
