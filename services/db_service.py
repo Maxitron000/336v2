@@ -69,18 +69,18 @@ class DatabaseService:
             if not isinstance(user_id, int) or user_id <= 0:
                 logging.error(f"Некорректный user_id: {user_id}")
                 return False
-            
+
             if not username or len(username.strip()) == 0:
                 logging.error("Пустое имя пользователя")
                 return False
-            
+
             if not full_name or len(full_name.strip()) < 3 or len(full_name.strip()) > 50:
                 logging.error(f"Некорректное ФИО: {full_name}")
                 return False
-            
+
             username = username.strip()[:50]  # Ограничиваем длину
             full_name = full_name.strip()
-            
+
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute(
                     'INSERT OR REPLACE INTO users (id, username, full_name) VALUES (?, ?, ?)',
@@ -114,23 +114,23 @@ class DatabaseService:
             if not isinstance(user_id, int) or user_id <= 0:
                 logging.error(f"Некорректный user_id: {user_id}")
                 return False
-            
+
             if not action or action.strip() not in ['в части', 'не в части', 'прибыл', 'убыл']:
                 logging.error(f"Некорректное действие: {action}")
                 return False
-            
+
             if not location or len(location.strip()) < 1 or len(location.strip()) > 100:
                 logging.error(f"Некорректная локация: {location}")
                 return False
-            
+
             # Проверяем, существует ли пользователь
             if not self.get_user(user_id):
                 logging.error(f"Пользователь {user_id} не найден")
                 return False
-            
+
             action = action.strip()
             location = location.strip()
-            
+
             # Проверяем последнее действие пользователя (защита от дублирования)
             last_records = self.get_user_records(user_id, 1)
             if last_records:
@@ -138,7 +138,7 @@ class DatabaseService:
                 if last_action == action:
                     logging.warning(f"Попытка дублирования действия '{action}' пользователем {user_id}")
                     return False
-            
+
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute(
                     'INSERT INTO records (user_id, action, location) VALUES (?, ?, ?)',
@@ -189,7 +189,7 @@ class DatabaseService:
         try:
             offset = (page - 1) * per_page
             since_date = datetime.now() - timedelta(days=days)
-            
+
             # Базовый запрос
             base_query = '''
                 SELECT r.*, u.full_name 
@@ -203,34 +203,34 @@ class DatabaseService:
                 JOIN users u ON r.user_id = u.id
                 WHERE r.timestamp > ?
             '''
-            
+
             params = [since_date]
-            
+
             # Добавляем фильтры
             if user_filter:
                 base_query += ' AND u.full_name LIKE ?'
                 count_query += ' AND u.full_name LIKE ?'
                 params.append(f'%{user_filter}%')
-            
+
             if location_filter:
                 base_query += ' AND r.location LIKE ?'
                 count_query += ' AND r.location LIKE ?'
                 params.append(f'%{location_filter}%')
-            
+
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
-                
+
                 # Получаем общее количество
                 total_cursor = conn.execute(count_query, params)
                 total_records = total_cursor.fetchone()['total']
-                
+
                 # Получаем записи для текущей страницы
                 base_query += ' ORDER BY r.timestamp DESC LIMIT ? OFFSET ?'
                 cursor = conn.execute(base_query, params + [per_page, offset])
                 records = [dict(row) for row in cursor.fetchall()]
-                
+
                 total_pages = (total_records + per_page - 1) // per_page
-                
+
                 return {
                     'records': records,
                     'current_page': page,
@@ -240,7 +240,7 @@ class DatabaseService:
                     'has_prev': page > 1,
                     'has_next': page < total_pages
                 }
-                
+
         except Exception as e:
             logging.error(f"Ошибка получения записей с пагинацией: {e}")
             return {
@@ -257,30 +257,30 @@ class DatabaseService:
         """Получить пользователей с пагинацией"""
         try:
             offset = (page - 1) * per_page
-            
+
             base_query = 'SELECT * FROM users'
             count_query = 'SELECT COUNT(*) as total FROM users'
             params = []
-            
+
             if search:
                 base_query += ' WHERE full_name LIKE ? OR username LIKE ?'
                 count_query += ' WHERE full_name LIKE ? OR username LIKE ?'
                 params = [f'%{search}%', f'%{search}%']
-            
+
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
-                
+
                 # Получаем общее количество
                 total_cursor = conn.execute(count_query, params)
                 total_users = total_cursor.fetchone()['total']
-                
+
                 # Получаем пользователей для текущей страницы
                 base_query += ' ORDER BY full_name LIMIT ? OFFSET ?'
                 cursor = conn.execute(base_query, params + [per_page, offset])
                 users = [dict(row) for row in cursor.fetchall()]
-                
+
                 total_pages = (total_users + per_page - 1) // per_page
-                
+
                 return {
                     'users': users,
                     'current_page': page,
@@ -290,7 +290,7 @@ class DatabaseService:
                     'has_prev': page > 1,
                     'has_next': page < total_pages
                 }
-                
+
         except Exception as e:
             logging.error(f"Ошибка получения пользователей с пагинацией: {e}")
             return {
@@ -479,15 +479,13 @@ class DatabaseService:
                 for row_num, row in enumerate(worksheet.iter_rows(min_row=2), start=2):
                     action_cell = row[1]  # Колонка "Действие"
 
-                    for cell in row:
-                        cell.border = border
-                        cell.alignment = Alignment(horizontal='left', vertical='center')
-
-                        # Применяем цветовую заливку в зависимости от действия
-                        if action_cell.value in ["в части", "прибыл"]:
-                            cell.fill = arrived_fill  # Зеленый для прибытия
-                        elif action_cell.value in ["не в части", "убыл"]:
-                            cell.fill = departed_fill  # Красный для убытия
+                    # Применяем цветовую заливку в зависимости от действия
+                    if action_cell.value == "прибыл":
+                        for cell in row:
+                            cell.fill = arrived_fill
+                    elif action_cell.value == "убыл":
+                        for cell in row:
+                            cell.fill = departed_fill
 
                 # Автоматически подгоняем ширину колонок
                 column_widths = {
@@ -497,7 +495,7 @@ class DatabaseService:
                     'D': 0,  # Дата
                     'E': 0   # Время
                 }
-                
+
                 # Определяем максимальную ширину для каждой колонки
                 for row in worksheet.iter_rows():
                     for cell in row:
@@ -509,7 +507,7 @@ class DatabaseService:
                                     column_widths[column_letter] = cell_length
                             except:
                                 pass
-                
+
                 # Устанавливаем ширину колонок с особыми настройками
                 worksheet.column_dimensions['A'].width = max(column_widths['A'] + 3, 20)  # ФИО - минимум 20
                 worksheet.column_dimensions['B'].width = max(column_widths['B'] + 2, 12)  # Действие - минимум 12
