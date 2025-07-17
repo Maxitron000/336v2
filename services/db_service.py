@@ -243,17 +243,18 @@ class DatabaseService:
                 'full_name': 'ФИО',
                 'action': 'Действие',
                 'location': 'Локация',
-                'timestamp': 'Время'
+                'timestamp': 'Дата_Время'
             })
-
-            # Выбираем нужные колонки
-            df = df[['ФИО', 'Действие', 'Локация', 'Время']]
 
             # Убираем эмодзи из локаций
             df['Локация'] = df['Локация'].str.replace(r'[^\w\s\-\.\,\(\)]', '', regex=True).str.strip()
 
-            # Форматируем время в читаемый вид
-            df['Время'] = df['Время'].dt.strftime('%d.%m.%Y %H:%M:%S')
+            # Создаем отдельные столбцы для даты и времени
+            df['Дата'] = df['Дата_Время'].dt.strftime('%d.%m.%Y')
+            df['Время'] = df['Дата_Время'].dt.strftime('%H:%M:%S')
+
+            # Выбираем нужные колонки в правильном порядке
+            df = df[['ФИО', 'Действие', 'Локация', 'Дата', 'Время']]
 
             # Сохраняем в файл
             filename = f"military_records_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
@@ -302,17 +303,32 @@ class DatabaseService:
                             cell.fill = departed_fill
 
                 # Автоматически подгоняем ширину колонок
-                for column in worksheet.columns:
-                    max_length = 0
-                    column_letter = column[0].column_letter
-                    for cell in column:
-                        try:
-                            if len(str(cell.value)) > max_length:
-                                max_length = len(str(cell.value))
-                        except:
-                            pass
-                    adjusted_width = min(max_length + 2, 50)
-                    worksheet.column_dimensions[column_letter].width = adjusted_width
+                column_widths = {
+                    'A': 0,  # ФИО
+                    'B': 0,  # Действие  
+                    'C': 0,  # Локация
+                    'D': 0,  # Дата
+                    'E': 0   # Время
+                }
+                
+                # Определяем максимальную ширину для каждой колонки
+                for row in worksheet.iter_rows():
+                    for cell in row:
+                        column_letter = cell.column_letter
+                        if column_letter in column_widths:
+                            try:
+                                cell_length = len(str(cell.value)) if cell.value else 0
+                                if cell_length > column_widths[column_letter]:
+                                    column_widths[column_letter] = cell_length
+                            except:
+                                pass
+                
+                # Устанавливаем ширину колонок с особыми настройками
+                worksheet.column_dimensions['A'].width = max(column_widths['A'] + 3, 20)  # ФИО - минимум 20
+                worksheet.column_dimensions['B'].width = max(column_widths['B'] + 2, 12)  # Действие - минимум 12
+                worksheet.column_dimensions['C'].width = max(column_widths['C'] + 2, 15)  # Локация - минимум 15
+                worksheet.column_dimensions['D'].width = 12  # Дата - фиксированная ширина
+                worksheet.column_dimensions['E'].width = 10  # Время - фиксированная ширина
 
                 # Устанавливаем высоту строк
                 for row in worksheet.iter_rows():
