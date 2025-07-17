@@ -22,6 +22,7 @@ def get_admin_panel_keyboard(is_main_admin: bool = False):
     keyboard = [
         [InlineKeyboardButton(text="📊 Быстрая сводка", callback_data="admin_summary")],
         [InlineKeyboardButton(text="📋 Журнал событий", callback_data="admin_journal")],
+        [InlineKeyboardButton(text="📈 Статистика", callback_data="admin_stats")],
         [InlineKeyboardButton(text="📤 Экспорт данных", callback_data="admin_export")]
     ]
 
