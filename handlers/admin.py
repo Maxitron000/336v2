@@ -817,19 +817,14 @@ async def callback_export_period(callback: CallbackQuery):
 
         if period == "today":
             # Экспорт за сегодня
-            records = db.get_all_records(days=1, limit=1000)
-            # Фильтруем только записи за сегодня
-            today = datetime.now().date()
-            records = [r for r in records if datetime.fromisoformat(r['timestamp'].replace('Z', '+00:00')).date() == today]
-            period_text = f"за сегодня ({today.strftime('%d.%m.%Y')})"
+            records = db.get_records_today()
+            period_text = f"за сегодня ({datetime.now().strftime('%d.%m.%Y')})"
             filename_period = "today"
 
         elif period == "yesterday":
             # Экспорт за вчера
+            records = db.get_records_yesterday()
             yesterday = (datetime.now() - timedelta(days=1)).date()
-            records = db.get_all_records(days=2, limit=1000)
-            # Фильтруем только записи за вчера
-            records = [r for r in records if datetime.fromisoformat(r['timestamp'].replace('Z', '+00:00')).date() == yesterday]
             period_text = f"за вчера ({yesterday.strftime('%d.%m.%Y')})"
             filename_period = "yesterday"
 

@@ -553,64 +553,7 @@ class DatabaseService:
             logging.error(f"Ошибка экспорта в Excel: {e}")
             return None
 
-    def get_all_records(self, days=30, limit=None):
-        """Получить все записи за указанный период"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-
-        try:
-            query = """
-                SELECT timestamp, full_name, action, location
-                FROM records
-                WHERE timestamp >= datetime('now', '-{} days')
-                ORDER BY timestamp DESC
-            """.format(days)
-
-            if limit:
-                query += f" LIMIT {limit}"
-
-            cursor.execute(query)
-            records = cursor.fetchall()
-
-            return [
-                {
-                    'timestamp': record[0],
-                    'full_name': record[1],
-                    'action': record[2],
-                    'location': record[3]
-                }
-                for record in records
-            ]
-        finally:
-            conn.close()
-
-    def get_records_by_date(self, date_str):
-        """Получить записи за конкретную дату"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-
-        try:
-            query = """
-                SELECT timestamp, full_name, action, location
-                FROM records
-                WHERE date(timestamp) = ?
-                ORDER BY timestamp DESC
-            """
-
-            cursor.execute(query, (date_str,))
-            records = cursor.fetchall()
-
-            return [
-                {
-                    'timestamp': record[0],
-                    'full_name': record[1],
-                    'action': record[2],
-                    'location': record[3]
-                }
-                for record in records
-            ]
-        finally:
-            conn.close()
+    
 
     def get_records_by_date(self, date_str: str) -> List[Dict[str, Any]]:
         """Получить записи за конкретную дату"""
@@ -802,7 +745,7 @@ class DatabaseService:
 
                 border = Border(
                     left=Side(style='thin'),
-                    right=Side(style=Side(style='thin'),
+                    right=Side(style='thin'),
                     top=Side(style='thin'),
                     bottom=Side(style='thin')
                 )
