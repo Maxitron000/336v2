@@ -171,13 +171,36 @@ async def callback_main_menu(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("action_"))
 async def callback_action_selection(callback: CallbackQuery):
     """Обработка выбора действия"""
-    action = "убыл" if "leave" in callback.data else "прибыл"
-    action_text = "убыли" if action == "убыл" else "прибыли"
+    user_id = callback.from_user.id
 
-    await callback.message.edit_text(
-        f"Выберите локацию для отметки о том, что вы {action_text}:",
-        reply_markup=get_location_keyboard(action)
-    )
+    if "arrive" in callback.data:
+        # Для "Прибыл" сразу добавляем запись "в части"
+        action = "в части"
+        location = "Часть"
+
+        if db.add_record(user_id, action, location):
+            await callback.message.edit_text(
+                f"✅ Статус обновлен!\n"
+                f"📍 Вы в части\n"
+                f"⏰ {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+            )
+
+            # Показываем главное меню через 2 секунды
+            await asyncio.sleep(2)
+            is_admin = db.is_admin(user_id) or user_id == MAIN_ADMIN_ID
+            await callback.message.edit_text(
+                "🎖️ Электронный табель выхода в город\n\nВыберите действие:",
+                reply_markup=get_main_menu_keyboard(is_admin)
+            )
+        else:
+            await callback.message.edit_text("❌ Ошибка при добавлении записи.")
+    else:
+        # Для "Убыл" показываем выбор локаций
+        await callback.message.edit_text(
+            "Выберите локацию, куда вы убыли:",
+            reply_markup=get_location_keyboard("убыл")
+        )
+
     await callback.answer()
 
 @router.callback_query(F.data.startswith("location_"))
