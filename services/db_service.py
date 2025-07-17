@@ -1,61 +1,169 @@
+
 import sqlite3
+import json
+from datetime import datetime, timedelta
+from typing import List, Dict, Optional
+import pandas as pd
+import os
 
 class DatabaseService:
-    def __init__(self, db_name='mydatabase.db'):
+    def __init__(self, db_name='military_tracker.db'):
         self.db_name = db_name
-        self.conn = None
-        self.cursor = None
+        self.init_database()
 
-    def connect(self):
+    def init_database(self):
+        """Инициализация базы данных"""
         try:
-            self.conn = sqlite3.connect(self.db_name)
-            self.cursor = self.conn.cursor()
-        except sqlite3.Error as e:
-            print(f"Database connection error: {e}")
-            self.conn = None
-            self.cursor = None
-            raise
+            with sqlite3.connect(self.db_name) as conn:
+                cursor = conn.cursor()
+                
+                # Таблица пользователей
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS users (
+                        id INTEGER PRIMARY KEY,
+                        username TEXT,
+                        full_name TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+                
+                # Таблица записей
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS records (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER,
+                        action TEXT NOT NULL,
+                        location TEXT NOT NULL,
+                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                    )
+                ''')
+                
+                # Таблица админов
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS admins (
+                        user_id INTEGER PRIMARY KEY,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                    )
+                ''')
+                
+                conn.commit()
+                print("✅ База данных инициализирована")
+        except Exception as e:
+            print(f"❌ Ошибка инициализации БД: {e}")
 
-    def disconnect(self):
-        if self.conn:
-            self.conn.close()
-            self.conn = None
-            self.cursor = None
-
-    def execute_query(self, query, params=()):
+    def add_user(self, user_id: int, username: str, full_name: str) -> bool:
+        """Добавление пользователя"""
         try:
-            self.connect()
-            self.cursor.execute(query, params)
-            self.conn.commit()
-            return self.cursor.fetchall()
-        except sqlite3.Error as e:
-            print(f"Query execution error: {e}")
+            with sqlite3.connect(self.db_name) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT OR REPLACE INTO users (id, username, full_name, last_activity)
+                    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ''', (user_id, username, full_name))
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"Ошибка добавления пользователя: {e}")
+            return False
+
+    def get_user(self, user_id: int) -> Optional[Dict]:
+        """Получение пользователя"""
+        try:
+            with sqlite3.connect(self.db_name) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))
+                row = cursor.fetchone()
+                if row:
+                    return {
+                        'id': row[0],
+                        'username': row[1], 
+                        'full_name': row[2],
+                        'created_at': row[3],
+                        'last_activity': row[4]
+                    }
+                return None
+        except Exception as e:
+            print(f"Ошибка получения пользователя: {e}")
             return None
-        finally:
-            self.disconnect()
 
-    def create_table(self, table_name, columns):
-        column_defs = ', '.join(columns)
-        query = f"CREATE TABLE IF NOT EXISTS {table_name} ({column_defs})"
-        self.execute_query(query)
+    def add_record(self, user_id: int, action: str, location: str) -> bool:
+        """Добавление записи"""
+        try:
+            with sqlite3.connect(self.db_name) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO records (user_id, action, location)
+                    VALUES (?, ?, ?)
+                ''', (user_id, action, location))
+                
+                # Обновляем последнюю активность пользователя
+                cursor.execute('''
+                    UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = ?
+                ''', (user_id,))
+                
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"Ошибка добавления записи: {e}")
+            return False
 
-    def insert_data(self, table_name, data):
-        placeholders = ', '.join(['?'] * len(data))
-        columns = ', '.join(data.keys())
-        values = tuple(data.values())
-        query = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
-        self.execute_query(query, values)
+    def get_user_records(self, user_id: int, limit: int = 10) -> List[Dict]:
+        """Получение записей пользователя"""
+        try:
+            with sqlite3.connect(self.db_name) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT action, location, timestamp 
+                    FROM records 
+                    WHERE user_id = ? 
+                    ORDER BY timestamp DESC 
+                    LIMIT ?
+                ''', (user_id, limit))
+                
+                rows = cursor.fetchall()
+                return [
+                    {
+                        'action': row[0],
+                        'location': row[1], 
+                        'timestamp': row[2]
+                    }
+                    for row in rows
+                ]
+        except Exception as e:
+            print(f"Ошибка получения записей: {e}")
+            return []
 
-    def fetch_data(self, table_name, condition=None):
-        query = f"SELECT * FROM {table_name}"
-        if condition:
-            query += f" WHERE {condition}"
-        return self.execute_query(query)
+    def is_admin(self, user_id: int) -> bool:
+        """Проверка является ли пользователь админом"""
+        try:
+            with sqlite3.connect(self.db_name) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT 1 FROM admins WHERE user_id = ?', (user_id,))
+                return cursor.fetchone() is not None
+        except Exception as e:
+            print(f"Ошибка проверки админа: {e}")
+            return False
+
+    def add_admin(self, user_id: int) -> bool:
+        """Добавление админа"""
+        try:
+            with sqlite3.connect(self.db_name) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT OR IGNORE INTO admins (user_id) VALUES (?)
+                ''', (user_id,))
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"Ошибка добавления админа: {e}")
+            return False
 
     def get_current_status(self):
         """Получить текущий статус для веб-интерфейса"""
         try:
-            # Заглушка для демонстрации
             return {
                 'total': 10,
                 'present': 7,
@@ -81,28 +189,16 @@ class DatabaseService:
                 'absent_list': []
             }
 
-# Example usage (can be removed or commented out for production)
-if __name__ == '__main__':
-    db_service = DatabaseService()
-
-    # Create a table
-    db_service.create_table(
-        'users',
-        ['id INTEGER PRIMARY KEY', 'name TEXT', 'email TEXT']
-    )
-
-    # Insert data
-    db_service.insert_data(
-        'users',
-        {'name': 'John Doe', 'email': 'john.doe@example.com'}
-    )
-    db_service.insert_data(
-        'users',
-        {'name': 'Jane Smith', 'email': 'jane.smith@example.com'}
-    )
-
-    # Fetch and print data
-    users = db_service.fetch_data('users')
-    if users:
-        for user in users:
-            print(user)
+    def execute_query(self, query: str, params=None):
+        """Выполнение SQL запроса"""
+        try:
+            with sqlite3.connect(self.db_name) as conn:
+                cursor = conn.cursor()
+                if params:
+                    cursor.execute(query, params)
+                else:
+                    cursor.execute(query)
+                return cursor.fetchall()
+        except Exception as e:
+            print(f"Ошибка выполнения запроса: {e}")
+            return []
