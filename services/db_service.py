@@ -782,7 +782,8 @@ class DatabaseService:
                 )
 
 # Форматируем заголовки
-                for cell in worksheet[1]:cell.fill = header_fill
+                for cell in worksheet[1]:
+                    cell.fill = header_fill
                     cell.font = header_font
                     cell.alignment = Alignment(horizontal='center', vertical='center')
                     cell.border = border
