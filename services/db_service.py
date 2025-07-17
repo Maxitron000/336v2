@@ -166,7 +166,7 @@ class DatabaseService:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.execute(
-                    'SELECT * FROM records WHERE user_id = ? ORDER BY timestamp DESC LIMIT ?',
+                    'SELECT * FROM records WHERE user_id = ? ORDER BY timestamp ASC LIMIT ?',
                     (user_id, limit)
                 )
                 return [dict(row) for row in cursor.fetchall()]
