@@ -722,8 +722,7 @@ async def callback_export_action(callback: CallbackQuery):
                     InlineKeyboardButton(text="📅 Вчера", callback_data="export_period_yesterday")
                 ],
                 [
-                    InlineKeyboardButton(```python
-text="📅 Последние 7 дней", callback_data="export_period_week"),
+                    InlineKeyboardButton(text="📅 Последние 7 дней", callback_data="export_period_week"),
                     InlineKeyboardButton(text="📅 Последние 30 дней", callback_data="export_period_month")
                 ],
                 [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_export_menu")]
