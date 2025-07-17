@@ -64,7 +64,7 @@ class DatabaseService:
                 logging.error("Пустое имя пользователя")
                 return False
             
-            if not full_name or len(full_name.strip()) < 5 or len(full_name.strip()) > 50:
+            if not full_name or len(full_name.strip()) < 3 or len(full_name.strip()) > 50:
                 logging.error(f"Некорректное ФИО: {full_name}")
                 return False
             
@@ -109,7 +109,7 @@ class DatabaseService:
                 logging.error(f"Некорректное действие: {action}")
                 return False
             
-            if not location or len(location.strip()) < 2 or len(location.strip()) > 100:
+            if not location or len(location.strip()) < 1 or len(location.strip()) > 100:
                 logging.error(f"Некорректная локация: {location}")
                 return False
             
@@ -120,6 +120,14 @@ class DatabaseService:
             
             action = action.strip()
             location = location.strip()
+            
+            # Проверяем последнее действие пользователя (защита от дублирования)
+            last_records = self.get_user_records(user_id, 1)
+            if last_records:
+                last_action = last_records[0]['action']
+                if last_action == action:
+                    logging.warning(f"Попытка дублирования действия '{action}' пользователем {user_id}")
+                    return False
             
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute(

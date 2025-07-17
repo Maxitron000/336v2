@@ -104,10 +104,10 @@ async def handle_name_input(message: Message, state: FSMContext):
             )
             return
 
-        # Проверка длины
-        if len(full_name) < 5 or len(full_name) > 50:
+        # Проверка длины (минимум 3 символа)
+        if len(full_name) < 3 or len(full_name) > 50:
             await message.answer(
-                "❌ ФИО должно содержать от 5 до 50 символов!\n\n"
+                "❌ ФИО должно содержать от 3 до 50 символов!\n\n"
                 f"Введено: {len(full_name)} символов\n"
                 "Попробуйте еще раз:"
             )
@@ -186,18 +186,26 @@ async def handle_custom_location(message: Message, state: FSMContext):
             return
 
         # Проверка длины
-        if len(custom_location) < 3 or len(custom_location) > 50:
+        if len(custom_location) < 2 or len(custom_location) > 50:
             await message.answer(
-                "❌ Название локации должно быть от 3 до 50 символов.\n"
+                "❌ Название локации должно быть от 2 до 50 символов.\n"
                 f"Сейчас: {len(custom_location)} символов\n"
                 "Попробуйте еще раз:"
             )
             return
 
         # Проверка на недопустимые символы
-        if any(char in custom_location for char in ['<', '>', '&', '"', "'"]):
+        if any(char in custom_location for char in ['<', '>', '&', '"', "'", '\n', '\r', '\t']):
             await message.answer(
-                "❌ Название не должно содержать символы: < > & \" '\n"
+                "❌ Название не должно содержать символы: < > & \" ' или переносы строк\n"
+                "Попробуйте еще раз:"
+            )
+            return
+
+        # Проверка на только пробелы или цифры
+        if custom_location.isspace() or custom_location.isdigit():
+            await message.answer(
+                "❌ Название локации не может состоять только из пробелов или цифр\n"
                 "Попробуйте еще раз:"
             )
             return
@@ -277,9 +285,11 @@ async def callback_action_selection(callback: CallbackQuery):
             if last_records and last_records[0]['action'] == "в части":
                 await callback.message.edit_text(
                     "⚠️ Вы уже отмечены как находящийся в части!\n"
-                    "Последняя отметка: " + datetime.fromisoformat(last_records[0]['timestamp'].replace('Z', '+00:00')).strftime('%d.%m.%Y %H:%M')
+                    f"📍 Локация: {last_records[0]['location']}\n"
+                    "⏰ Последняя отметка: " + datetime.fromisoformat(last_records[0]['timestamp'].replace('Z', '+00:00')).strftime('%d.%m.%Y %H:%M') + "\n\n"
+                    "❗ Сначала убыльте, а затем снова прибудьте."
                 )
-                await asyncio.sleep(2)
+                await asyncio.sleep(3)
                 is_admin = db.is_admin(user_id) or user_id == MAIN_ADMIN_ID
                 await callback.message.edit_text(
                     "🎖️ Электронный табель выхода в город\n\nВыберите действие:",
@@ -314,10 +324,11 @@ async def callback_action_selection(callback: CallbackQuery):
             if last_records and last_records[0]['action'] == "не в части":
                 await callback.message.edit_text(
                     "⚠️ Вы уже отмечены как отсутствующий!\n"
-                    f"Локация: {last_records[0]['location']}\n"
-                    "Последняя отметка: " + datetime.fromisoformat(last_records[0]['timestamp'].replace('Z', '+00:00')).strftime('%d.%m.%Y %H:%M')
+                    f"📍 Текущая локация: {last_records[0]['location']}\n"
+                    "⏰ Последняя отметка: " + datetime.fromisoformat(last_records[0]['timestamp'].replace('Z', '+00:00')).strftime('%d.%m.%Y %H:%M') + "\n\n"
+                    "❗ Сначала прибудьте в часть, а затем снова убудьте."
                 )
-                await asyncio.sleep(2)
+                await asyncio.sleep(3)
                 is_admin = db.is_admin(user_id) or user_id == MAIN_ADMIN_ID
                 await callback.message.edit_text(
                     "🎖️ Электронный табель выхода в город\n\nВыберите действие:",
@@ -384,8 +395,14 @@ async def callback_location_selection(callback: CallbackQuery, state: FSMContext
             return
 
         # Валидация локации
-        if not location or len(location.strip()) < 2:
-            await callback.message.edit_text("❌ Некорректная локация.")
+        if not location or len(location.strip()) < 1 or len(location.strip()) > 50:
+            await callback.message.edit_text("❌ Некорректная локация (должна быть от 1 до 50 символов).")
+            await callback.answer()
+            return
+
+        # Дополнительная проверка на безопасность
+        if any(char in location for char in ['<', '>', '&', '"', "'", '\n', '\r', '\t']):
+            await callback.message.edit_text("❌ Локация содержит недопустимые символы.")
             await callback.answer()
             return
 
@@ -483,7 +500,7 @@ def can_user_make_action(user_id: int) -> bool:
     now = datetime.now()
     if user_id in user_last_action:
         last_action_time = user_last_action[user_id]
-        if (now - last_action_time).total_seconds() < 10:  # Минимум 10 секунд между действиями
+        if (now - last_action_time).total_seconds() < 3:  # Минимум 3 секунды между действиями
             return False
     return True
 
