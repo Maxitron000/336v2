@@ -197,11 +197,10 @@ def setup_logging():
     
     # Настройка логирования только в файл для чистого вывода консоли
     logging.basicConfig(
-        level=logging.WARNING,  # Уменьшаем уровень для консоли
+        level=logging.ERROR,  # Показываем только ошибки в консоли
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
         handlers=[
             logging.FileHandler('logs/bot.log', encoding='utf-8'),
-            logging.StreamHandler()
         ]
     )
     
@@ -209,6 +208,7 @@ def setup_logging():
     logging.getLogger('aiogram').setLevel(logging.ERROR)
     logging.getLogger('httpx').setLevel(logging.ERROR)
     logging.getLogger('apscheduler').setLevel(logging.ERROR)
+    logging.getLogger('root').setLevel(logging.ERROR)
 
 async def main():
     """Основная функция запуска бота"""

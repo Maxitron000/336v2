@@ -60,18 +60,15 @@ class DatabaseService:
                 # Миграция: добавляем отсутствующую колонку added_at если её нет
                 try:
                     conn.execute('ALTER TABLE admins ADD COLUMN added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
-                    logging.info("✅ Добавлена колонка added_at в таблицу admins")
+                    pass  # Колонка успешно добавлена
                 except sqlite3.OperationalError as e:
-                    if "duplicate column name" in str(e).lower():
-                        logging.info("ℹ️ Колонка added_at уже существует")
-                    else:
+                    if "duplicate column name" not in str(e).lower():
                         logging.warning(f"⚠️ Ошибка добавления колонки added_at: {e}")
 
                 # Ensure main admin is added
                 self.ensure_main_admin(conn)
 
                 conn.commit()
-                logging.info("✅ База данных инициализирована")
         except Exception as e:
             logging.error(f"Ошибка инициализации БД: {e}")
 
@@ -84,7 +81,7 @@ class DatabaseService:
                 'INSERT OR IGNORE INTO admins (user_id, added_at) VALUES (?, CURRENT_TIMESTAMP)',
                 (MAIN_ADMIN_ID,)
             )
-            logging.info(f"✅ Главный админ {MAIN_ADMIN_ID} добавлен")
+            pass  # Главный админ добавлен
         except ImportError:
             logging.warning("⚠️ config.py не найден, главный админ не добавлен")
         except Exception as e:
