@@ -8,6 +8,17 @@ from config import MAIN_ADMIN_ID
 import logging
 from datetime import datetime, timedelta
 
+# Проверяем наличие необходимых библиотек для экспорта
+try:
+    import pandas as pd
+    import openpyxl
+    EXPORT_AVAILABLE = True
+    logging.info("✅ Библиотеки экспорта загружены успешно")
+except ImportError as e:
+    EXPORT_AVAILABLE = False
+    logging.error(f"❌ Ошибка импорта библиотек экспорта: {e}")
+    logging.error("Необходимо установить: pip install pandas openpyxl")
+
 router = Router()
 
 # Состояния для админ-панели
@@ -677,6 +688,18 @@ async def callback_export_action(callback: CallbackQuery):
         await callback.answer("❌ У вас нет прав администратора", show_alert=True)
         return
 
+    # Проверяем доступность экспорта
+    if not EXPORT_AVAILABLE:
+        await callback.message.edit_text(
+            "❌ **Ошибка системы экспорта**\n\n"
+            "Не удалось загрузить необходимые библиотеки для экспорта.\n"
+            "Обратитесь к администратору системы.",
+            reply_markup=get_back_keyboard("admin_export_menu"),
+            parse_mode="Markdown"
+        )
+        await callback.answer("❌ Экспорт недоступен", show_alert=True)
+        return
+
     export_type = callback.data.replace("export_", "")
 
     try:
@@ -745,15 +768,42 @@ async def callback_export_action(callback: CallbackQuery):
             return
 
         if filename:
-            from aiogram.types import FSInputFile
-            import os
+            try:
+                from aiogram.types import FSInputFile
+                import os
 
-            if os.path.exists(filename):
-                document = FSInputFile(filename, filename=f"military_records_{export_type}.xlsx")
-                await callback.message.answer_document(
-                    document,
-                    caption=f"📤 Экспорт: {period_text}"
+                if os.path.exists(filename):
+                    # Проверяем размер файла
+                    file_size = os.path.getsize(filename)
+                    if file_size > 50 * 1024 * 1024:  # 50MB лимит Telegram
+                        await callback.message.edit_text(
+                            f"❌ **Файл слишком большой**\n\n"
+                            f"Размер файла: {file_size / (1024*1024):.1f} МБ\n"
+                            f"Максимальный размер: 50 МБ\n\n"
+                            f"Попробуйте экспортировать данные за меньший период.",
+                            reply_markup=get_back_keyboard("admin_export_menu"),
+                            parse_mode="Markdown"
+                        )
+                        os.remove(filename)
+                        return
+
+                    document = FSInputFile(filename, filename=f"military_records_{export_type}_{datetime.now().strftime('%Y%m%d')}.xlsx")
+                    await callback.message.answer_document(
+                        document,
+                        caption=f"📤 Экспорт: {period_text}\n📊 Размер файла: {file_size / 1024:.1f} КБ"
+                    )
+                else:
+                    raise FileNotFoundError("Файл не найден после создания")
+            except Exception as send_error:
+                logging.error(f"Ошибка отправки файла: {send_error}")
+                await callback.message.edit_text(
+                    f"❌ **Ошибка отправки файла**\n\n"
+                    f"Файл создан, но не удалось его отправить: {str(send_error)}",
+                    reply_markup=get_back_keyboard("admin_export_menu"),
+                    parse_mode="Markdown"
                 )
+                await callback.answer("❌ Ошибка отправки", show_alert=True)
+                return
 
                 # Удаляем временный файл после отправки
                 try:

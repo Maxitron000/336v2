@@ -476,8 +476,10 @@ class DatabaseService:
             filename = f"military_records_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
             # Создаем Excel файл с улучшенным форматированием
+            logging.info(f"Создаем Excel файл: {filename}")
             with pd.ExcelWriter(filename, engine='openpyxl') as writer:
                 df.to_excel(writer, sheet_name='Записи', index=False)
+                logging.info("DataFrame записан в Excel")
 
                 # Получаем рабочий лист и стили
                 worksheet = writer.sheets['Записи']
@@ -553,7 +555,7 @@ class DatabaseService:
             logging.error(f"Ошибка экспорта в Excel: {e}")
             return None
 
-    
+
 
     def get_records_by_date(self, date_str: str) -> List[Dict[str, Any]]:
         """Получить записи за конкретную дату"""
@@ -757,8 +759,10 @@ class DatabaseService:
             filename = f"military_records_{period_safe}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
             # Создаем Excel файл с улучшенным форматированием
+            logging.info(f"Создаем Excel файл: {filename}")
             with pd.ExcelWriter(filename, engine='openpyxl') as writer:
                 df.to_excel(writer, sheet_name='Записи', index=False)
+                logging.info("DataFrame записан в Excel")
 
                 # Получаем рабочий лист и стили
                 worksheet = writer.sheets['Записи']
@@ -778,7 +782,7 @@ class DatabaseService:
                     bottom=Side(style='thin')
                 )
 
-                # Форматируем заголовки
+# Форматируем заголовки
                 for cell in worksheet[1]:
                     cell.fill = header_fill
                     cell.font = header_font
