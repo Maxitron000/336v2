@@ -719,7 +719,7 @@ async def callback_export_action(callback: CallbackQuery):
                 "Выберите временной интервал для экспорта данных:",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
                 parse_mode="Markdown"
-                        )
+                                )
             await callback.answer()
             return
 
@@ -1477,7 +1477,7 @@ async def callback_settings_action(callback: CallbackQuery):
             text += f"Записи старше 90 дней были удалены из системы.\n\n"
             text += "✅ База данных очищена"
 
-        elif action == "cleanup" and "full" in callback.data:
+        elif action == "full_cleanup":
             # Показываем предупреждение о полной очистке
             text = "⚠️ **ВНИМАНИЕ: Полная очистка**\n\n"
             text += "Это действие удалит ВСЕ записи из системы!\n"
@@ -1487,3 +1487,90 @@ async def callback_settings_action(callback: CallbackQuery):
             keyboard = [
                 [InlineKeyboardButton(text="🗑️ ПОДТВЕРДИТЬ ОЧИСТКУ", callback_data="settings_confirm_full_cleanup")],
                 [InlineKeyboardButton(text="🔙 Отмена", callback_data="admin_settings")]
+            ]
+
+            await callback.message.edit_text(
+                text,
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+                parse_mode="Markdown"
+            )
+            await callback.answer()
+            return
+
+        elif action == "confirm" and "full" in callback.data:
+            # Подтверждение полной очистки
+            deleted_count = db.clear_all_data()
+            text = f"🗑️ **Полная очистка завершена**\n\n"
+            text += f"Удалено записей: {deleted_count}\n"
+            text += f"ВСЕ данные системы были удалены.\n\n"
+            text += "⚠️ Система сброшена к начальному состоянию"
+
+        elif action == "optimize":
+            # Оптимизация базы данных
+            try:
+                db.optimize_database()
+                text = f"🔄 **Оптимизация завершена**\n\n"
+                text += f"База данных оптимизирована.\n"
+                text += f"Индексы перестроены.\n"
+                text += f"Неиспользуемое пространство очищено.\n\n"
+                text += "✅ Производительность улучшена"
+            except Exception as e:
+                text = f"❌ **Ошибка оптимизации**\n\n"
+                text += f"Не удалось оптимизировать базу данных: {str(e)}"
+
+        elif action == "stats" and "db" in callback.data:
+            # Статистика базы данных
+            try:
+                stats = db.get_database_stats()
+                text = f"📊 **Статистика базы данных**\n\n"
+                text += f"👥 Пользователей: {stats.get('users', 0)}\n"
+                text += f"📋 Записей: {stats.get('records', 0)}\n"
+                text += f"👑 Администраторов: {stats.get('admins', 0)}\n"
+                text += f"💾 Размер БД: {stats.get('size', 'Неизвестно')}\n\n"
+                text += f"📈 Последняя активность: {stats.get('last_activity', 'Неизвестно')}"
+            except Exception as e:
+                text = f"❌ **Ошибка получения статистики**\n\n"
+                text += f"Не удалось получить данные: {str(e)}"
+
+        elif action == "info" and "system" in callback.data:
+            # Системная информация
+            import platform
+            import psutil
+            import os
+
+            text = f"⚙️ **Системная информация**\n\n"
+            text += f"🖥️ **Система:**\n"
+            text += f"• ОС: {platform.system()} {platform.release()}\n"
+            text += f"• Python: {platform.python_version()}\n"
+            text += f"• Архитектура: {platform.machine()}\n\n"
+
+            text += f"💾 **Ресурсы:**\n"
+            text += f"• ОЗУ: {psutil.virtual_memory().percent}% использовано\n"
+            text += f"• CPU: {psutil.cpu_percent()}%\n"
+            text += f"• Диск: {psutil.disk_usage('/').percent}%\n\n"
+
+            text += f"📁 **Проект:**\n"
+            text += f"• Рабочая папка: {os.getcwd()}\n"
+
+        elif action == "technical":
+            text = "🛠️ **Технические настройки**\n\n"
+            text += "Доступные настройки:\n"
+            text += "• Лимиты запросов\n"
+            text += "• Таймауты соединений\n"
+            text += "• Размеры буферов\n"
+            text += "• Логирование\n\n"
+            text += "⚙️ Функция в разработке"
+
+        else:
+            text = "⚙️ Функция в разработке"
+
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_back_keyboard("admin_settings"),
+            parse_mode="Markdown"
+        )
+        await callback.answer()
+
+    except Exception as e:
+        logging.error(f"Ошибка в settings_action: {e}")
+        await callback.answer("❌ Ошибка выполнения действия", show_alert=True)
