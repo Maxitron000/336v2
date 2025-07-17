@@ -326,7 +326,8 @@ class DatabaseService:
                     ''', (user['id'],))
                     last_record = last_record_cursor.fetchone()
 
-                    if last_record and last_record['action'] == 'убыл':
+                    # Проверяем статус: "не в части" или "убыл" = отсутствует
+                    if last_record and last_record['action'] in ['не в части', 'убыл']:
                         absent_list.append({
                             'name': user['full_name'],
                             'location': last_record['location']

@@ -39,7 +39,11 @@ def get_back_keyboard(callback_data: str = "admin_panel"):
 
 async def is_admin(user_id: int) -> bool:
     """Проверить права администратора"""
-    return db.is_admin(user_id) or user_id == MAIN_ADMIN_ID
+    # Главный админ всегда имеет права
+    if user_id == MAIN_ADMIN_ID:
+        return True
+    # Проверяем в базе данных
+    return db.is_admin(user_id)
 
 @router.callback_query(F.data == "admin_panel")
 async def callback_admin_panel(callback: CallbackQuery):
@@ -109,7 +113,7 @@ async def show_admin_journal(callback: CallbackQuery):
     """Показать записи журнала для админа"""
     user_id = callback.from_user.id
 
-    if not db.is_admin(user_id):
+    if not await is_admin(user_id):
         await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
         return
 
