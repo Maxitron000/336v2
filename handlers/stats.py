@@ -218,10 +218,6 @@ async def callback_journal_export(callback: CallbackQuery):
     except Exception as e:
         logging.error(f"Ошибка экспорта журнала: {e}")
         await callback.answer("❌ Ошибка экспорта", show_alert=True)
-            
-    except Exception as e:
-        logging.error(f"Ошибка экспорта журнала: {e}")
-        await callback.answer("❌ Ошибка при экспорте", show_alert=True)
 
 @router.callback_query(F.data == "admin_export")
 async def callback_admin_export(callback: CallbackQuery):

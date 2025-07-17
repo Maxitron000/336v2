@@ -2,8 +2,18 @@ import sqlite3
 import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Any
-import pandas as pd
 import os
+
+# Проверяем наличие необходимых библиотек
+try:
+    import pandas as pd
+    import openpyxl
+    EXPORT_AVAILABLE = True
+except ImportError as e:
+    logging.error(f"❌ Ошибка импорта библиотек для экспорта: {e}")
+    logging.error("Установите зависимости: pip install pandas openpyxl")
+    EXPORT_AVAILABLE = False
+    pd = None
 
 class DatabaseService:
     def __init__(self, db_path: str = "military_tracker.db"):
@@ -435,6 +445,10 @@ class DatabaseService:
 
     def export_to_excel(self, days: int = 30) -> Optional[str]:
         """Экспорт данных в Excel"""
+        if not EXPORT_AVAILABLE:
+            logging.error("❌ Библиотеки для экспорта недоступны")
+            return None
+            
         try:
             records = self.get_all_records(days=days, limit=10000)
 

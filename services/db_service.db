@@ -1,0 +1,7 @@
+def export_records_to_excel(self, records: List[Dict[str, Any]], period_description: str = "") -> Optional[str]:
+        """Экспорт конкретных записей в Excel"""
+        if not EXPORT_AVAILABLE:
+            logging.error("❌ Библиотеки для экспорта недоступны")
+            return None
+
+        try:
