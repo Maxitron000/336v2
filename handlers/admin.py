@@ -869,13 +869,13 @@ async def callback_export_action(callback: CallbackQuery):
                         await callback.answer("❌ Ошибка отправки", show_alert=True)
                         return
                 else:
-                    await callback.message.edit_text(
-                        f"❌ **Нет данных для экспорта**\n\n"
-                        f"За период ({period_text}) нет записей для экспорта.",
-                        reply_markup=get_back_keyboard("admin_export_menu"),
-                        parse_mode="Markdown"
-                    )
-                    await callback.answer("❌ Нет данных для экспорта", show_alert=True)
+            await callback.message.edit_text(
+                f"❌ **Нет данных для экспорта**\n\n"
+                f"За период ({period_text}) нет записей для экспорта.",
+                reply_markup=get_back_keyboard("admin_export_menu"),
+                parse_mode="Markdown"
+            )
+            await callback.answer("❌ Нет данных для экспорта", show_alert=True)
 
     except Exception as e:
         logging.error(f"Ошибка экспорта: {e}")
