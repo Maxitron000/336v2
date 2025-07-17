@@ -734,28 +734,32 @@ async def callback_export_period(callback: CallbackQuery):
             today = datetime.now().date()
             records = db.get_records_by_date(str(today))
             period_text = f"за сегодня ({today.strftime('%d.%m.%Y')})"
+            filename_period = "today"
             
         elif period == "yesterday":
             # Экспорт за вчера
             yesterday = (datetime.now() - timedelta(days=1)).date()
             records = db.get_records_by_date(str(yesterday))
             period_text = f"за вчера ({yesterday.strftime('%d.%m.%Y')})"
+            filename_period = "yesterday"
             
         elif period == "week":
             # Экспорт за неделю
             records = db.get_all_records(days=7, limit=1000)
             period_text = "за последние 7 дней"
+            filename_period = "week"
             
         elif period == "month":
             # Экспорт за месяц
             records = db.get_all_records(days=30, limit=1000)
             period_text = "за последние 30 дней"
+            filename_period = "month"
         else:
             await callback.answer("❌ Неизвестный период", show_alert=True)
             return
 
         # Создаем файл экспорта
-        if records:
+        if records and len(records) > 0:
             filename = db.export_records_to_excel(records, period_text)
             
             if filename:
@@ -764,7 +768,7 @@ async def callback_export_period(callback: CallbackQuery):
                 
                 if os.path.exists(filename):
                     # Отправляем файл
-                    document = FSInputFile(filename, filename=f"military_records_{period}.xlsx")
+                    document = FSInputFile(filename, filename=f"military_records_{filename_period}.xlsx")
                     caption_text = f"📤 Экспорт {period_text}\n📊 Записей: {len(records)}"
                     
                     await callback.message.answer_document(
@@ -775,8 +779,8 @@ async def callback_export_period(callback: CallbackQuery):
                     # Удаляем временный файл после отправки
                     try:
                         os.remove(filename)
-                    except:
-                        pass
+                    except Exception as cleanup_error:
+                        logging.warning(f"Не удалось удалить временный файл: {cleanup_error}")
                         
                     # Обновляем сообщение
                     result_text = f"✅ **Экспорт завершен**\n\n📤 Данные {period_text} успешно экспортированы и отправлены.\n📊 Обработано записей: {len(records)}"
@@ -813,7 +817,7 @@ async def callback_export_period(callback: CallbackQuery):
                 
                 if os.path.exists(filename):
                     # Отправляем пустой файл
-                    document = FSInputFile(filename, filename=f"military_records_{period}_empty.xlsx")
+                    document = FSInputFile(filename, filename=f"military_records_{filename_period}_empty.xlsx")
                     caption_text = f"📤 Экспорт {period_text}\n❌ Нет данных за выбранный период"
                     
                     await callback.message.answer_document(
@@ -824,8 +828,8 @@ async def callback_export_period(callback: CallbackQuery):
                     # Удаляем временный файл после отправки
                     try:
                         os.remove(filename)
-                    except:
-                        pass
+                    except Exception as cleanup_error:
+                        logging.warning(f"Не удалось удалить временный файл: {cleanup_error}")
                         
                     # Обновляем сообщение
                     result_text = f"✅ **Экспорт завершен**\n\n📤 Файл {period_text} создан.\n❌ За этот период нет записей о движении персонала."
@@ -861,7 +865,7 @@ async def callback_export_period(callback: CallbackQuery):
             reply_markup=get_back_keyboard("admin_export_menu"),
             parse_mode="Markdown"
         )
-        await callback.answer("❌ Ошибка при экспорта", show_alert=True)
+        await callback.answer("❌ Ошибка при экспорте", show_alert=True)
 
 # Остальные функции (summary, manage, и т.д.) остаются без изменений
 @router.callback_query(F.data == "admin_summary")

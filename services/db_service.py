@@ -558,16 +558,19 @@ class DatabaseService:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
+                # Используем LIKE для более надежного поиска по дате
                 cursor = conn.execute('''
                     SELECT r.*, u.full_name 
                     FROM records r
                     JOIN users u ON r.user_id = u.id
-                    WHERE DATE(r.timestamp) = ?
+                    WHERE DATE(r.timestamp) = ? OR r.timestamp LIKE ?
                     ORDER BY r.timestamp ASC
-                ''', (date_str,))
-                return [dict(row) for row in cursor.fetchall()]
+                ''', (date_str, f"{date_str}%"))
+                records = [dict(row) for row in cursor.fetchall()]
+                logging.info(f"Найдено записей за {date_str}: {len(records)}")
+                return records
         except Exception as e:
-            logging.error(f"Ошибка получения записей по дате: {e}")
+            logging.error(f"Ошибка получения записей по дате {date_str}: {e}")
             return []
 
     def get_records_today(self) -> List[Dict[str, Any]]:
@@ -681,11 +684,15 @@ class DatabaseService:
     def export_records_to_excel(self, records: List[Dict[str, Any]], period_description: str = "") -> Optional[str]:
         """Экспорт конкретных записей в Excel"""
         try:
-            if not records:
+            logging.info(f"Начинаем экспорт {len(records) if records else 0} записей для периода: {period_description}")
+            
+            if not records or len(records) == 0:
+                logging.warning(f"Нет записей для экспорта за период: {period_description}")
                 return None
 
             # Создаем DataFrame
             df = pd.DataFrame(records)
+            logging.info(f"DataFrame создан с {len(df)} строками")
 
             # Форматируем данные - новые записи идут снизу (хронологический порядок)
             df['timestamp'] = pd.to_datetime(df['timestamp'])
