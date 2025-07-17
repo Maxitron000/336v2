@@ -376,6 +376,45 @@ async def callback_personnel_action(callback: CallbackQuery):
             if len(absent_users) > 20:
                 text += f"... и еще {len(absent_users) - 20}"
 
+        elif action == "search":
+            await callback.message.edit_text(
+                "🔍 **Поиск бойца**\n\n"
+                "Введите имя или фамилию для поиска:",
+                reply_markup=get_back_keyboard("admin_personnel"),
+                parse_mode="Markdown"
+            )
+            # Здесь можно добавить FSM состояние для поиска
+            text = "🔍 Поиск временно недоступен. Используйте общий поиск в админ-панели."
+            
+        elif action == "details":
+            # Показываем детальную статистику по бойцам
+            users = db.get_all_users()
+            text = f"📊 **Детальная информация**\n\n"
+            text += f"👥 Всего бойцов: {len(users)}\n\n"
+            
+            # Статистика активности за последние 30 дней
+            records = db.get_all_records(days=30, limit=1000)
+            if records:
+                user_activity = {}
+                for record in records:
+                    name = record['full_name']
+                    user_activity[name] = user_activity.get(name, 0) + 1
+                
+                text += "📈 **Активность за 30 дней:**\n"
+                sorted_activity = sorted(user_activity.items(), key=lambda x: x[1], reverse=True)
+                for i, (name, count) in enumerate(sorted_activity[:10], 1):
+                    text += f"{i}. {name}: {count} записей\n"
+            else:
+                text += "📝 Записей активности не найдено"
+            
+        elif action == "bulk":
+            text = "🔧 **Массовые действия**\n\n"
+            text += "Доступные операции:\n"
+            text += "• Массовое изменение статуса\n"
+            text += "• Групповые уведомления\n"
+            text += "• Экспорт списков\n\n"
+            text += "⚙️ Функция в разработке"
+            
         else:
             text = "⚙️ Функция в разработке"
 
@@ -485,6 +524,90 @@ async def callback_analytics_action(callback: CallbackQuery):
             else:
                 text += "📝 Данных по активности не найдено"
 
+        elif action == "time":
+            # Анализ по времени
+            records = db.get_all_records(days=30)
+            if records:
+                from collections import defaultdict
+                hourly_stats = defaultdict(int)
+                daily_stats = defaultdict(int)
+                
+                for record in records:
+                    timestamp = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
+                    hour = timestamp.hour
+                    day = timestamp.strftime('%A')
+                    hourly_stats[hour] += 1
+                    daily_stats[day] += 1
+                
+                text = "📅 **Временной анализ (30 дней)**\n\n"
+                
+                # Самые активные часы
+                text += "🕒 **Пиковые часы активности:**\n"
+                sorted_hours = sorted(hourly_stats.items(), key=lambda x: x[1], reverse=True)
+                for hour, count in sorted_hours[:5]:
+                    text += f"• {hour:02d}:00 - {count} записей\n"
+                
+                text += "\n📆 **По дням недели:**\n"
+                day_names = {
+                    'Monday': 'Понедельник',
+                    'Tuesday': 'Вторник', 
+                    'Wednesday': 'Среда',
+                    'Thursday': 'Четверг',
+                    'Friday': 'Пятница',
+                    'Saturday': 'Суббота',
+                    'Sunday': 'Воскресенье'
+                }
+                
+                for day, count in daily_stats.items():
+                    day_ru = day_names.get(day, day)
+                    text += f"• {day_ru}: {count} записей\n"
+            else:
+                text = "📅 **Временной анализ**\n\n📝 Недостаточно данных для анализа"
+
+        elif action == "top":
+            # ТОП активности
+            records = db.get_all_records(days=30)
+            users = db.get_all_users()
+            
+            text = "🏆 **ТОП активности за месяц**\n\n"
+            
+            if records and users:
+                # ТОП по количеству записей
+                user_records = {}
+                location_records = {}
+                
+                for record in records:
+                    name = record['full_name']
+                    location = record['location']
+                    user_records[name] = user_records.get(name, 0) + 1
+                    if record['action'] == 'не в части':
+                        location_records[location] = location_records.get(location, 0) + 1
+                
+                # ТОП пользователи
+                text += "👑 **Самые активные бойцы:**\n"
+                sorted_users = sorted(user_records.items(), key=lambda x: x[1], reverse=True)
+                for i, (name, count) in enumerate(sorted_users[:5], 1):
+                    text += f"{i}. {name} - {count} записей\n"
+                
+                # ТОП локации
+                if location_records:
+                    text += "\n📍 **Популярные локации:**\n"
+                    sorted_locations = sorted(location_records.items(), key=lambda x: x[1], reverse=True)
+                    for i, (location, count) in enumerate(sorted_locations[:5], 1):
+                        text += f"{i}. {location} - {count} раз\n"
+            else:
+                text += "📝 Недостаточно данных для составления рейтинга"
+
+        elif action == "charts":
+            text = "📊 **Графики и диаграммы**\n\n"
+            text += "📈 Планируемые графики:\n"
+            text += "• Динамика по дням\n"
+            text += "• Распределение по часам\n"
+            text += "• Активность по локациям\n"
+            text += "• Тренды присутствия\n\n"
+            text += "⚙️ Визуализация в разработке\n"
+            text += "💡 Используйте экспорт Excel для создания графиков"
+
         else:
             text = "⚙️ Функция в разработке"
 
@@ -556,8 +679,8 @@ async def callback_export_action(callback: CallbackQuery):
             await callback.answer()
             return
         elif export_type == "csv":
-            await callback.answer("⚙️ CSV экспорт в разработке", show_alert=True)
-            return
+            filename = db.export_to_csv(days=30)
+            period_text = "CSV экспорт за 30 дней"
         elif export_type == "pdf":
             await callback.answer("⚙️ PDF экспорт в разработке", show_alert=True)
             return

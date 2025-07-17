@@ -563,12 +563,24 @@ class DatabaseService:
                     FROM records r
                     JOIN users u ON r.user_id = u.id
                     WHERE DATE(r.timestamp) = ?
-                    ORDER BY r.timestamp DESC
+                    ORDER BY r.timestamp ASC
                 ''', (date_str,))
                 return [dict(row) for row in cursor.fetchall()]
         except Exception as e:
             logging.error(f"Ошибка получения записей по дате: {e}")
             return []
+
+    def get_records_today(self) -> List[Dict[str, Any]]:
+        """Получить записи за сегодня"""
+        from datetime import datetime
+        today = datetime.now().date()
+        return self.get_records_by_date(str(today))
+
+    def get_records_yesterday(self) -> List[Dict[str, Any]]:
+        """Получить записи за вчера"""
+        from datetime import datetime, timedelta
+        yesterday = (datetime.now() - timedelta(days=1)).date()
+        return self.get_records_by_date(str(yesterday))
 
     def cleanup_old_records(self, days: int = 180) -> int:
         """Очистка старых записей"""
@@ -794,4 +806,52 @@ class DatabaseService:
             return filename
         except Exception as e:
             logging.error(f"Ошибка экспорта записей в Excel: {e}")
+            return None
+
+    def export_to_csv(self, days: int = 30) -> Optional[str]:
+        """Экспорт данных в CSV формат"""
+        try:
+            records = self.get_all_records(days=days, limit=10000)
+
+            if not records:
+                return None
+
+            # Создаем DataFrame
+            df = pd.DataFrame(records)
+
+            # Форматируем данные
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df = df.sort_values('timestamp', ascending=True)
+
+            # Преобразуем действия для корректного отображения
+            df['action'] = df['action'].replace({
+                'в части': 'прибыл',
+                'не в части': 'убыл'
+            })
+
+            # Переименовываем колонки
+            df = df.rename(columns={
+                'full_name': 'ФИО',
+                'action': 'Действие',
+                'location': 'Локация',
+                'timestamp': 'Дата_Время'
+            })
+
+            # Убираем эмодзи из локаций
+            df['Локация'] = df['Локация'].str.replace(r'[^\w\s\-\.\,\(\)]', '', regex=True).str.strip()
+
+            # Создаем отдельные столбцы для даты и времени
+            df['Дата'] = df['Дата_Время'].dt.strftime('%d.%m.%Y')
+            df['Время'] = df['Дата_Время'].dt.strftime('%H:%M:%S')
+
+            # Выбираем нужные колонки
+            df = df[['ФИО', 'Действие', 'Локация', 'Дата', 'Время']]
+
+            # Сохраняем в CSV файл
+            filename = f"military_records_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            df.to_csv(filename, index=False, encoding='utf-8-sig')
+
+            return filename
+        except Exception as e:
+            logging.error(f"Ошибка экспорта в CSV: {e}")
             return None
