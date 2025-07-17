@@ -159,7 +159,9 @@ class DatabaseService:
             # Проверяем последнее действие пользователя (защита от дублирования)
             last_records = self.get_user_records(user_id, 1)
             if last_records:
-                last_action = last_records[0]['action']
+                # Получаем последнюю запись (самую новую)
+                last_record = last_records[-1]  # Последняя запись в списке
+                last_action = last_record['action']
                 if last_action == action:
                     logging.warning(f"Попытка дублирования действия '{action}' пользователем {user_id}")
                     return False
@@ -181,7 +183,7 @@ class DatabaseService:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.execute(
-                    'SELECT * FROM records WHERE user_id = ? ORDER BY timestamp ASC LIMIT ?',
+                    'SELECT * FROM records WHERE user_id = ? ORDER BY timestamp DESC LIMIT ?',
                     (user_id, limit)
                 )
                 return [dict(row) for row in cursor.fetchall()]

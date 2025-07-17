@@ -285,7 +285,7 @@ async def handle_custom_location(message: Message, state: FSMContext):
 async def callback_change_location(callback: CallbackQuery, state: FSMContext):
     """Сменить локацию без повторной отметки"""
     user_id = callback.from_user.id
-    
+
     # Проверяем, зарегистрирован ли пользователь
     if not db.get_user(user_id):
         await callback.message.edit_text(
@@ -297,7 +297,7 @@ async def callback_change_location(callback: CallbackQuery, state: FSMContext):
 
     # Очищаем состояние
     await state.clear()
-    
+
     # Показываем выбор локаций для смены
     await callback.message.edit_text(
         "🔄 Выберите новую локацию:",
@@ -579,9 +579,9 @@ async def cmd_journal(message: Message, state: FSMContext):
                 text += "─" * 20 + "\n\n"
 
         # Показываем текущий статус (берем последнюю запись)
-        latest_records = db.get_user_records(user_id, limit=1000)  # Получаем все записи
+        latest_records = db.get_user_records(user_id, limit=1)  # Получаем последнюю запись
         if latest_records:
-            last_record = latest_records[-1]  # Берем последнюю (самую новую)
+            last_record = latest_records[0]  # Берем первую (самую новую)
             if last_record['action'] == 'не в части':
                 current_status = "🔴 **Убыл (не в части)**"
             else:
@@ -659,9 +659,9 @@ async def callback_show_journal(callback: CallbackQuery):
                 text += "─" * 20 + "\n\n"
 
         # Показываем текущий статус (берем последнюю запись)
-        latest_records = db.get_user_records(user_id, limit=1000)  # Получаем все записи
+        latest_records = db.get_user_records(user_id, limit=1)  # Получаем последнюю запись
         if latest_records:
-            last_record = latest_records[-1]  # Берем последнюю (самую новую)
+            last_record = latest_records[0]  # Берем первую (самую новую)
             if last_record['action'] == 'не в части':
                 current_status = "🔴 **Убыл (не в части)**"
             else:
