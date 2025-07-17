@@ -730,62 +730,38 @@ class DatabaseService:
         """Альтернативный метод удаления администратора"""
         return self.remove_admin(user_id)
 
-    def export_records_to_excel(self, records: List[Dict[str, Any]], period_description: str = "") -> Optional[str]:
-        """Экспорт конкретных записей в Excel"""
-        if not EXPORT_AVAILABLE:
-            logging.error("❌ Библиотеки для экспорта недоступны")
-            return None
-
+    def export_records_to_excel(self, records: list, period_description: str = "") -> str:
+        """Экспорт записей в Excel файл с улучшенным форматированием"""
         try:
-            logging.info(f"Начинаем экспорт {len(records) if records else 0} записей для периода: {period_description}")
+            import os
 
-            if not records or len(records) == 0:
-                logging.warning(f"Нет записей для экспорта за период: {period_description}")
+            # Создаем папку exports если её нет
+            exports_dir = "exports"
+            if not os.path.exists(exports_dir):
+                os.makedirs(exports_dir)
+
+            if not records:
                 return self.create_empty_export_file(period_description)
 
-            # Создаем DataFrame
+            # Преобразуем записи в DataFrame
             df = pd.DataFrame(records)
-            logging.info(f"DataFrame создан с {len(df)} строками")
-
-            # Форматируем данные - новые записи идут снизу (хронологический порядок)
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-            df = df.sort_values('timestamp', ascending=True)
-
-            # Преобразуем действия для корректного отображения
-            df['action'] = df['action'].replace({
-                'в части': 'прибыл',
-                'не в части': 'убыл'
-            })
 
             # Переименовываем колонки
-            df = df.rename(columns={
-                'full_name': 'ФИО',
-                'action': 'Действие',
-                'location': 'Локация',
-                'timestamp': 'Дата_Время'
-            })
+            df.columns = ['ID', 'User ID', 'ФИО', 'Действие', 'Локация', 'Временная метка']
 
-            # Убираем эмодзи из локаций
-            df['Локация'] = df['Локация'].str.replace(r'[^\w\s\-\.\,\(\)]', '', regex=True).str.strip()
+            # Преобразуем timestamp в читаемый формат
+            df['Дата'] = pd.to_datetime(df['Временная метка']).dt.strftime('%d.%m.%Y')
+            df['Время'] = pd.to_datetime(df['Временная метка']).dt.strftime('%H:%M')
 
-            # Создаем отдельные столбцы для даты и времени
-            df['Дата'] = df['Дата_Время'].dt.strftime('%d.%m.%Y')
-            df['Время'] = df['Дата_Время'].dt.strftime('%H:%M:%S')
-
-            # Выбираем нужные колонки в правильном порядке
+            # Удаляем ненужные колонки
             df = df[['ФИО', 'Действие', 'Локация', 'Дата', 'Время']]
 
-            # Создаем безопасное имя файла
-            import re
-            period_safe = re.sub(r'[^\w\s-]', '', period_description).strip()
-            period_safe = re.sub(r'\s+', '_', period_safe)
-            if not period_safe:
-                period_safe = "export"
+            # Создаем безопасное имя файла в папке exports
+            period_safe = period_description.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "-").replace(":", "")
+            filename = os.path.join(exports_dir, f"military_records_{period_safe}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
 
-            filename = f"military_records_{period_safe}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-
-            # Создаем Excel файл с улучшенным форматированием
             logging.info(f"Создаем Excel файл: {filename}")
+
             with pd.ExcelWriter(filename, engine='openpyxl') as writer:
                 df.to_excel(writer, sheet_name='Записи', index=False)
                 logging.info("DataFrame записан в Excel")
@@ -811,7 +787,7 @@ class DatabaseService:
                 for cell in worksheet[1]:
                     cell.fill = header_fill
                     cell.font = header_font
-                    cell.alignment = Alignment(horizontal='center', vertical='center')
+cell.alignment = Alignment(horizontal='center', vertical='center')
                     cell.border = border
 
                 # Форматируем данные с цветовой заливкой
@@ -923,6 +899,13 @@ class DatabaseService:
     def export_to_csv(self, days: int = 30) -> Optional[str]:
         """Экспорт данных в CSV формат"""
         try:
+            import os
+
+            # Создаем папку exports если её нет
+            exports_dir = "exports"
+            if not os.path.exists(exports_dir):
+                os.makedirs(exports_dir)
+
             records = self.get_all_records(days=days, limit=10000)
 
             if not records:
@@ -960,7 +943,7 @@ class DatabaseService:
             df = df[['ФИО', 'Действие', 'Локация', 'Дата', 'Время']]
 
             # Сохраняем в CSV файл
-            filename = f"military_records_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            filename = os.path.join(exports_dir, f"military_records_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
             df.to_csv(filename, index=False, encoding='utf-8-sig')
 
             return filename

@@ -1,0 +1,37 @@
+
+# Файлы экспорта
+exports/
+*.xlsx
+*.csv
+
+# Базы данных
+*.db
+
+# Конфигурация
+.env
+
+# Логи
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
