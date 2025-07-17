@@ -1,4 +1,3 @@
-
 import re
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
@@ -29,10 +28,10 @@ def get_main_menu_keyboard(is_admin: bool = False):
         ],
         [InlineKeyboardButton(text="📋 Мой журнал", callback_data="show_journal")]
     ]
-    
+
     if is_admin:
         keyboard.append([InlineKeyboardButton(text="⚙️ Админ-панель", callback_data="admin_panel")])
-    
+
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_location_keyboard(action: str):
@@ -47,7 +46,7 @@ def get_location_keyboard(action: str):
                 callback_data=f"location_{action}_{location}"
             ))
         keyboard.append(row)
-    
+
     keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -64,10 +63,10 @@ async def cmd_start(message: Message, state: FSMContext):
     user = message.from_user
     user_id = user.id
     username = user.username or f"user_{user_id}"
-    
+
     # Проверяем, зарегистрирован ли пользователь
     existing_user = db.get_user(user_id)
-    
+
     if not existing_user:
         # Запрашиваем ФИО
         await state.set_state(UserStates.waiting_for_name)
@@ -78,7 +77,7 @@ async def cmd_start(message: Message, state: FSMContext):
             "Пример: Иванов И.И."
         )
         return
-    
+
     # Пользователь уже зарегистрирован
     is_admin = db.is_admin(user_id) or user_id == MAIN_ADMIN_ID
     await message.answer(
@@ -93,7 +92,7 @@ async def handle_name_input(message: Message, state: FSMContext):
     user_id = user.id
     username = user.username or f"user_{user_id}"
     full_name = message.text.strip()
-    
+
     # Валидация формата ФИО
     if not re.match(r'^[А-ЯЁ][а-яё]+ [А-ЯЁ]\.[А-ЯЁ]\.$', full_name):
         await message.answer(
@@ -103,7 +102,7 @@ async def handle_name_input(message: Message, state: FSMContext):
             "Попробуйте еще раз:"
         )
         return
-    
+
     # Сохраняем пользователя
     if db.add_user(user_id, username, full_name):
         await state.clear()
@@ -123,23 +122,23 @@ async def handle_name_input(message: Message, state: FSMContext):
 async def handle_custom_location(message: Message, state: FSMContext):
     """Обработка ввода кастомной локации"""
     custom_location = message.text.strip()
-    
+
     if len(custom_location) < 3 or len(custom_location) > 50:
         await message.answer(
             "Название локации должно быть от 3 до 50 символов.\n"
             "Попробуйте еще раз:"
         )
         return
-    
+
     # Получаем сохраненные данные
     user_data = await state.get_data()
     action = user_data.get('action')
     user_id = message.from_user.id
-    
+
     # Добавляем запись
     if db.add_record(user_id, action, custom_location):
         await state.clear()
-        
+
         action_text = "убыл" if action == "убыл" else "прибыл"
         await message.answer(
             f"✅ Запись добавлена!\n"
@@ -147,7 +146,7 @@ async def handle_custom_location(message: Message, state: FSMContext):
             f"Локация: {custom_location}\n"
             f"Время: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
         )
-        
+
         is_admin = db.is_admin(user_id) or user_id == MAIN_ADMIN_ID
         await message.answer(
             "🎖️ Электронный табель выхода в город\n\nВыберите действие:",
@@ -161,7 +160,7 @@ async def callback_main_menu(callback: CallbackQuery):
     """Показать главное меню"""
     user_id = callback.from_user.id
     is_admin = db.is_admin(user_id) or user_id == MAIN_ADMIN_ID
-    
+
     await callback.message.edit_text(
         "🎖️ Электронный табель выхода в город\n\nВыберите действие:",
         reply_markup=get_main_menu_keyboard(is_admin)
@@ -173,7 +172,7 @@ async def callback_action_selection(callback: CallbackQuery):
     """Обработка выбора действия"""
     action = "убыл" if "leave" in callback.data else "прибыл"
     action_text = "убыли" if action == "убыл" else "прибыли"
-    
+
     await callback.message.edit_text(
         f"Выберите локацию для отметки о том, что вы {action_text}:",
         reply_markup=get_location_keyboard(action)
@@ -186,14 +185,14 @@ async def callback_location_selection(callback: CallbackQuery, state: FSMContext
     parts = callback.data.split("_", 2)
     action = parts[1]
     location = parts[2]
-    
+
     user_id = callback.from_user.id
-    
+
     if location == "📝 Другое":
         # Запрашиваем кастомную локацию
         await state.set_state(UserStates.waiting_for_custom_location)
         await state.update_data(action=action)
-        
+
         await callback.message.edit_text(
             "Введите название локации:\n\n"
             "Примеры:\n"
@@ -204,7 +203,7 @@ async def callback_location_selection(callback: CallbackQuery, state: FSMContext
         )
         await callback.answer()
         return
-    
+
     # Добавляем запись
     if db.add_record(user_id, action, location):
         action_text = "убыл" if action == "убыл" else "прибыл"
@@ -214,7 +213,7 @@ async def callback_location_selection(callback: CallbackQuery, state: FSMContext
             f"Локация: {location}\n"
             f"Время: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
         )
-        
+
         # Показываем главное меню через 2 секунды
         await asyncio.sleep(2)
         is_admin = db.is_admin(user_id) or user_id == MAIN_ADMIN_ID
@@ -224,7 +223,7 @@ async def callback_location_selection(callback: CallbackQuery, state: FSMContext
         )
     else:
         await callback.message.edit_text("❌ Ошибка при добавлении записи.")
-    
+
     await callback.answer()
 
 @router.callback_query(F.data == "show_journal")
@@ -232,7 +231,7 @@ async def callback_show_journal(callback: CallbackQuery):
     """Показать журнал пользователя"""
     user_id = callback.from_user.id
     records = db.get_user_records(user_id, 5)
-    
+
     if not records:
         text = "📋 Ваш журнал пуст.\nУ вас пока нет записей."
     else:
@@ -243,7 +242,7 @@ async def callback_show_journal(callback: CallbackQuery):
             action_emoji = "🚶" if record['action'] == "убыл" else "🏠"
             text += f"{action_emoji} {record['action']} - {record['location']}\n"
             text += f"⏰ {formatted_time}\n\n"
-    
+
     await callback.message.edit_text(text, reply_markup=get_journal_keyboard())
     await callback.answer()
 
