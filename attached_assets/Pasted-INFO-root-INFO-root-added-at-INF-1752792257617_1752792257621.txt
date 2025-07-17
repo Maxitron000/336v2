@@ -1,0 +1,79 @@
+INFO:root:✅ Библиотеки экспорта загружены успешно
+INFO:root:ℹ️ Колонка added_at уже существует
+INFO:root:✅ Главный админ 7973895358 добавлен
+INFO:root:✅ База данных инициализирована
+INFO:root:ℹ️ Колонка added_at уже существует
+INFO:root:✅ Главный админ 7973895358 добавлен
+INFO:root:✅ База данных инициализирована
+INFO:root:ℹ️ Колонка added_at уже существует
+INFO:root:✅ Главный админ 7973895358 добавлен
+INFO:root:✅ База данных инициализирована
+✅ Система мониторинга загружена
+============================================================
+🤖 ВОЕННЫЙ ТАБЕЛЬ - СИСТЕМА ЗАПУСКА
+============================================================
+⏰ Время запуска: 17.07.2025 22:43:51
+============================================================
+
+🔧 ПРОВЕРКА КОНФИГУРАЦИИ:
+  ✅ Токен Telegram бота: OK
+  ✅ ID главного администратора: OK
+
+💾 ПРОВЕРКА БАЗЫ ДАННЫХ:
+  ✅ Файл БД найден: military_tracker.db
+INFO:root:ℹ️ Колонка added_at уже существует
+INFO:root:✅ Главный админ 7973895358 добавлен
+INFO:root:✅ База данных инициализирована
+  ✅ Подключение к БД: OK
+  ✅ Все таблицы проверены: OK
+
+🎯 ПРОВЕРКА ОБРАБОТЧИКОВ:
+  ✅ Все модули загружены: OK
+
+💻 ИНФОРМАЦИЯ О СИСТЕМЕ:
+  🐍 Python: 3.12.7
+  📂 Рабочая директория: /home/runner/workspace
+  💾 База данных: military_tracker.db
+
+============================================================
+🎉 ВСЕ СИСТЕМЫ ГОТОВЫ К РАБОТЕ! 🎉
+🚀 Запуск бота...
+============================================================
+
+🧪 ТЕСТИРОВАНИЕ API:
+  ✅ Бот: @Tabel336bot (ID: 8040939701)
+  ✅ API подключение: OK
+
+🔗 РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ:
+  ✅ Все обработчики зарегистрированы
+
+⏰ НАСТРОЙКА ПЛАНИРОВЩИКА:
+INFO:apscheduler.scheduler:Adding job tentatively -- it will be properly scheduled when the scheduler starts
+INFO:apscheduler.scheduler:Adding job tentatively -- it will be properly scheduled when the scheduler starts
+INFO:apscheduler.scheduler:Adding job tentatively -- it will be properly scheduled when the scheduler starts
+INFO:apscheduler.scheduler:Adding job tentatively -- it will be properly scheduled when the scheduler starts
+INFO:apscheduler.scheduler:Added job "send_morning_reminder" to job store "default"
+INFO:apscheduler.scheduler:Added job "send_evening_reminder" to job store "default"
+INFO:apscheduler.scheduler:Added job "send_weekly_report" to job store "default"
+INFO:apscheduler.scheduler:Added job "cleanup_old_records" to job store "default"
+INFO:apscheduler.scheduler:Scheduler started
+INFO:root:Планировщик уведомлений настроен и запущен
+  ✅ Планировщик настроен
+
+🖥️ СИСТЕМА МОНИТОРИНГА:
+  ✅ Мониторинг активирован
+
+🧹 АВТООЧИСТКА:
+WARNING:root:Предупреждение очистки: cannot import name 'cleanup_all' from 'cleanup_unused' (/home/runner/workspace/cleanup_unused.py)
+2025-07-17 22:43:51 - root - WARNING - Предупреждение очистки: cannot import name 'cleanup_all' from 'cleanup_unused' (/home/runner/workspace/cleanup_unused.py)
+
+🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉
+🤖 БОТ ЗАПУЩЕН И ГОТОВ К РАБОТЕ!
+👑 Главный админ: 7973895358
+📱 Пользователи могут начать работу
+🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉
+
+INFO:root:Подключение к Telegram API (попытка 1/3)
+INFO:root:База данных оптимизирована
+INFO:root:Выполнена оптимизация базы данных
+  

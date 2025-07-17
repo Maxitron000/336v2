@@ -804,4 +804,4 @@ class DatabaseService:
 
     def delete_admin(self, user_id: int) -> bool:
         """Альтернативный метод удаления администратора"""
-        return self.remove_admin(
+        return self.remove_admin(user_id)
