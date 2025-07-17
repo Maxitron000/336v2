@@ -10,7 +10,7 @@ channel = "stable-24_05"
 packages = ["glibcLocales"]
 
 [workflows]
-runButton = "Run Bot"
+runButton = "Run Web Interface"
 
 [[workflows.workflow]]
 name = "Run Bot"
@@ -20,15 +20,6 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python main.py"
-
-[[workflows.workflow]]
-name = "Run Web Interface"
-author = 44716284
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python web_interface.py"
 
 [[ports]]
 localPort = 5000
