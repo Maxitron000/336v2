@@ -215,9 +215,26 @@ def dashboard():
         current_status = db.get_current_status()
         
         # Получаем общую статистику
-        total_users = len(db.get_all_users())
-        admins_count = len(db.get_all_admins())
-        today_records = len(db.get_records_by_date(datetime.now().strftime('%Y-%m-%d')))
+        try:
+            total_users = len(db.get_all_users())
+            logging.info(f"✅ Получено пользователей: {total_users}")
+        except Exception as e:
+            logging.error(f"❌ Ошибка получения пользователей: {e}")
+            total_users = 0
+        
+        try:
+            admins_count = len(db.get_all_admins())
+            logging.info(f"✅ Получено админов: {admins_count}")
+        except Exception as e:
+            logging.error(f"❌ Ошибка получения админов: {e}")
+            admins_count = 0
+        
+        try:
+            today_records = len(db.get_records_by_date(datetime.now().strftime('%Y-%m-%d')))
+            logging.info(f"✅ Записей за сегодня: {today_records}")
+        except Exception as e:
+            logging.error(f"❌ Ошибка получения записей за сегодня: {e}")
+            today_records = 0
         
         # Получаем последнюю активность
         recent_records = db.get_all_records(limit=10)

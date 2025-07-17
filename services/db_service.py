@@ -47,6 +47,16 @@ class DatabaseService:
                 conn.execute('CREATE INDEX IF NOT EXISTS idx_records_user_id ON records (user_id)')
                 conn.execute('CREATE INDEX IF NOT EXISTS idx_records_timestamp ON records (timestamp)')
 
+                # Миграция: добавляем отсутствующую колонку added_at если её нет
+                try:
+                    conn.execute('ALTER TABLE admins ADD COLUMN added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+                    logging.info("✅ Добавлена колонка added_at в таблицу admins")
+                except sqlite3.OperationalError as e:
+                    if "duplicate column name" in str(e).lower():
+                        logging.info("ℹ️ Колонка added_at уже существует")
+                    else:
+                        logging.warning(f"⚠️ Ошибка добавления колонки added_at: {e}")
+
                 conn.commit()
                 logging.info("✅ База данных инициализирована")
         except Exception as e:
@@ -367,7 +377,7 @@ class DatabaseService:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.execute('''
-                    SELECT u.id, u.username, u.full_name
+                    SELECT u.id, u.username, u.full_name, a.added_at
                     FROM admins a
                     JOIN users u ON a.user_id = u.id
                     ORDER BY u.full_name
@@ -375,7 +385,18 @@ class DatabaseService:
                 return [dict(row) for row in cursor.fetchall()]
         except Exception as e:
             logging.error(f"Ошибка получения админов: {e}")
-            return []
+            # Fallback запрос без added_at если колонки нет
+            try:
+                cursor = conn.execute('''
+                    SELECT u.id, u.username, u.full_name
+                    FROM admins a
+                    JOIN users u ON a.user_id = u.id
+                    ORDER BY u.full_name
+                ''')
+                return [dict(row) for row in cursor.fetchall()]
+            except Exception as e2:
+                logging.error(f"Ошибка fallback запроса админов: {e2}")
+                return []
 
     def get_all_users(self) -> List[Dict[str, Any]]:
         """Получить всех пользователей"""
