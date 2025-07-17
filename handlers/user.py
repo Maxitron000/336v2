@@ -40,11 +40,13 @@ def get_location_keyboard(action: str):
     """Создать клавиатуру локаций"""
     keyboard = []
 
-    # Показываем все локации
-    for i in range(0, len(LOCATIONS), 2):
+    # Показываем все локации кроме "Другое"
+    locations_to_show = [loc for loc in LOCATIONS if loc != "📝 Другое"]
+    
+    for i in range(0, len(locations_to_show), 2):
         row = []
-        for j in range(i, min(i + 2, len(LOCATIONS))):
-            location = LOCATIONS[j]
+        for j in range(i, min(i + 2, len(locations_to_show))):
+            location = locations_to_show[j]
             row.append(InlineKeyboardButton(
                 text=location,
                 callback_data=f"location_{action}_{location}"
@@ -64,31 +66,6 @@ def get_journal_keyboard():
     keyboard = [
         [InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")]
     ]
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-# Пагинация журнала убрана - показываем максимум 10 записей без пагинации
-
-def get_location_keyboard_with_pagination(action: str, current_page: int = 1):
-    """Создать клавиатуру локаций без пагинации"""
-    keyboard = []
-
-    # Показываем все локации без пагинации
-    for i in range(0, len(LOCATIONS), 2):
-        row = []
-        for j in range(i, min(i + 2, len(LOCATIONS))):
-            location = LOCATIONS[j]
-            row.append(InlineKeyboardButton(
-                text=location,
-                callback_data=f"location_{action}_{location}"
-            ))
-        keyboard.append(row)
-
-    # Добавляем кнопку "Другое" только для убыли и только один раз
-    if action == "убыл":
-        keyboard.append([InlineKeyboardButton(text="📝 Другое", callback_data=f"location_{action}_📝 Другое")])
-
-    # Добавляем кнопку "Назад"
-    keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 @router.message(Command("start"))

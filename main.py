@@ -219,6 +219,18 @@ async def main():
         except Exception as e:
             print_colored(f"  ⚠️  Ошибка планировщика: {str(e)}", Colors.WARNING)
 
+        # Автоматическая очистка при запуске
+        print_colored("\n🧹 АВТОМАТИЧЕСКАЯ ОЧИСТКА:", Colors.OKBLUE + Colors.BOLD)
+        try:
+            from cleanup_unused import SystemCleaner
+            cleaner = SystemCleaner()
+            cleanup_results = cleaner.full_cleanup()
+            print_colored(f"  ✅ Записей удалено: {cleanup_results['records_deleted']}", Colors.OKGREEN)
+            print_colored(f"  ✅ Экспортов удалено: {cleanup_results['exports_deleted']}", Colors.OKGREEN)
+            print_colored(f"  ✅ Логов удалено: {cleanup_results['logs_deleted']}", Colors.OKGREEN)
+        except Exception as e:
+            print_colored(f"  ⚠️  Ошибка очистки: {str(e)}", Colors.WARNING)
+
         # Финальный тест
         await test_bot_functionality(bot)
 
