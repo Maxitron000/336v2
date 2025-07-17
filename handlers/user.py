@@ -326,21 +326,28 @@ async def callback_action_selection(callback: CallbackQuery, state: FSMContext):
             location = "Часть"
 
             if db.add_record(user_id, action, location):
-                await callback.message.edit_text(
+                # Отправляем сообщение о статусе
+                await callback.message.answer(
                     f"✅ Статус обновлен!\n"
                     f"📍 Вы в части\n"
                     f"⏰ {datetime.now().strftime('%d.%m.%Y %H:%M')}"
                 )
 
-                # Показываем главное меню через 2 секунды
-                await asyncio.sleep(2)
+                # Показываем главное меню сразу внизу
                 is_admin = db.is_admin(user_id) or user_id == MAIN_ADMIN_ID
-                await callback.message.edit_text(
+                await callback.message.answer(
                     "🎖️ Электронный табель выхода в город\n\nВыберите действие:",
                     reply_markup=get_main_menu_keyboard(is_admin)
                 )
-            else:
-                await callback.message.edit_text("❌ Ошибка при добавлении записи. Попробуйте позже.")
+
+                # Уведомляем главного админа ПОСЛЕ главного меню
+                await send_admin_notification(callback.message.bot, user_id, action, location)
+
+                # Удаляем старое сообщение с кнопками
+                try:
+                    await callback.message.delete()
+                except:
+                    pass
         else:
             # Проверяем последнее действие для "убыл"
             last_records = db.get_user_records(user_id, 1)
@@ -759,3 +766,25 @@ async def handle_unknown_message(message: Message):
             )
     except Exception as e:
         logging.error(f"Ошибка в handle_unknown_message: {e}")
+
+async def send_admin_notification(bot, user_id: int, action: str, location: str):
+    """Отправляет уведомление главному админу о действиях пользователя."""
+    try:
+        user = db.get_user(user_id)
+        if not user:
+            logging.warning(f"Не удалось найти пользователя с ID {user_id} для уведомления админа.")
+            return
+
+        full_name = user['full_name']
+        timestamp = datetime.now().strftime('%d.%m.%Y %H:%M')
+
+        if action == "в части":
+            message = f"✅ [{timestamp}] Пользователь {full_name} прибыл в часть."
+        elif action == "не в части":
+            message = f"❌ [{timestamp}] Пользователь {full_name} убыл из части. Локация: {location}"
+        else:
+            message = f"ℹ️ [{timestamp}] Пользователь {full_name} совершил действие: {action}. Локация: {location}"
+
+        await bot.send_message(MAIN_ADMIN_ID, message)
+    except Exception as e:
+        logging.error(f"Ошибка при отправке уведомления админу: {e}")
