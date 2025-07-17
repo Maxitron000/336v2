@@ -251,7 +251,8 @@ def setup_scheduler(bot: Bot):
 
         # Утренние напоминания
         if settings.get('morning_reminder', True):
-            hour, minute = map(int, settings['morning_time'].split(':'))
+            morning_time = settings.get('morning_time', '08:00')
+            hour, minute = map(int, morning_time.split(':'))
             scheduler.add_job(
                 send_morning_reminder,
                 'cron',
@@ -263,7 +264,8 @@ def setup_scheduler(bot: Bot):
 
         # Вечерние напоминания
         if settings.get('evening_reminder', True):
-            hour, minute = map(int, settings['evening_time'].split(':'))
+            evening_time = settings.get('evening_time', '18:00')
+            hour, minute = map(int, evening_time.split(':'))
             scheduler.add_job(
                 send_evening_reminder,
                 'cron',
@@ -280,8 +282,10 @@ def setup_scheduler(bot: Bot):
                 'friday': 4, 'saturday': 5, 'sunday': 6
             }
 
-            day_of_week = day_map.get(settings['weekly_day'], 0)
-            hour, minute = map(int, settings['weekly_time'].split(':'))
+            weekly_day = settings.get('weekly_day', 'monday')
+            weekly_time = settings.get('weekly_time', '10:00')
+            day_of_week = day_map.get(weekly_day, 0)
+            hour, minute = map(int, weekly_time.split(':'))
 
             scheduler.add_job(
                 send_weekly_report,

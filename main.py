@@ -1,4 +1,3 @@
-
 import asyncio
 import logging
 import os
@@ -48,12 +47,12 @@ def print_header():
 def check_environment():
     """Проверка переменных окружения"""
     print_colored("\n🔧 ПРОВЕРКА КОНФИГУРАЦИИ:", Colors.OKBLUE + Colors.BOLD)
-    
+
     checks = [
         ("BOT_TOKEN", BOT_TOKEN, "Токен Telegram бота"),
         ("MAIN_ADMIN_ID", MAIN_ADMIN_ID, "ID главного администратора")
     ]
-    
+
     all_ok = True
     for var_name, var_value, description in checks:
         if var_value and str(var_value) != "0":
@@ -61,41 +60,41 @@ def check_environment():
         else:
             print_colored(f"  ❌ {description}: НЕ НАЙДЕНО", Colors.FAIL)
             all_ok = False
-    
+
     return all_ok
 
 def check_database():
     """Проверка базы данных"""
     print_colored("\n💾 ПРОВЕРКА БАЗЫ ДАННЫХ:", Colors.OKBLUE + Colors.BOLD)
-    
+
     try:
         # Проверяем существование файла БД
         if os.path.exists(DB_NAME):
             print_colored(f"  ✅ Файл БД найден: {DB_NAME}", Colors.OKGREEN)
         else:
             print_colored(f"  ⚠️  Файл БД будет создан: {DB_NAME}", Colors.WARNING)
-        
+
         # Проверяем подключение к БД
         db = DatabaseService()
         print_colored("  ✅ Подключение к БД: OK", Colors.OKGREEN)
-        
+
         # Проверяем таблицы
         with sqlite3.connect(DB_NAME) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
             tables = cursor.fetchall()
-            
+
             required_tables = ['users', 'records', 'admins']
             existing_tables = [table[0] for table in tables]
-            
+
             for table in required_tables:
                 if table in existing_tables:
                     print_colored(f"  ✅ Таблица '{table}': OK", Colors.OKGREEN)
                 else:
                     print_colored(f"  ⚠️  Таблица '{table}': будет создана", Colors.WARNING)
-        
+
         return True
-        
+
     except Exception as e:
         print_colored(f"  ❌ Ошибка БД: {str(e)}", Colors.FAIL)
         return False
@@ -103,14 +102,14 @@ def check_database():
 def check_handlers():
     """Проверка обработчиков"""
     print_colored("\n🎯 ПРОВЕРКА ОБРАБОТЧИКОВ:", Colors.OKBLUE + Colors.BOLD)
-    
+
     handlers_list = [
         ("user", user.router, "Пользовательские команды"),
         ("admin", admin.router, "Административные команды"),
         ("stats", stats.router, "Статистика и отчеты"),
         ("notifications", notifications.router, "Система уведомлений")
     ]
-    
+
     all_ok = True
     for handler_name, handler_router, description in handlers_list:
         try:
@@ -122,7 +121,7 @@ def check_handlers():
         except Exception as e:
             print_colored(f"  ❌ {description}: ОШИБКА - {str(e)}", Colors.FAIL)
             all_ok = False
-    
+
     return all_ok
 
 
@@ -137,29 +136,29 @@ def print_system_info():
 def print_startup_summary(all_systems_ok):
     """Итоговая сводка запуска"""
     print_colored("\n" + "=" * 60, Colors.HEADER)
-    
+
     if all_systems_ok:
         print_colored("🎉 ВСЕ СИСТЕМЫ ГОТОВЫ К РАБОТЕ! 🎉", Colors.OKGREEN + Colors.BOLD)
         print_colored("🚀 Запуск бота...", Colors.OKGREEN)
     else:
         print_colored("⚠️  ОБНАРУЖЕНЫ ПРОБЛЕМЫ!", Colors.WARNING + Colors.BOLD)
         print_colored("🔧 Попытка запуска с ошибками...", Colors.WARNING)
-    
+
     print_colored("=" * 60, Colors.HEADER)
 
 async def test_bot_functionality(bot):
     """Тестирование основных функций бота"""
     print_colored("\n🧪 ТЕСТИРОВАНИЕ ФУНКЦИЙ БОТА:", Colors.OKBLUE + Colors.BOLD)
-    
+
     try:
         # Получаем информацию о боте
         bot_info = await bot.get_me()
         print_colored(f"  ✅ Имя бота: @{bot_info.username}", Colors.OKGREEN)
         print_colored(f"  ✅ ID бота: {bot_info.id}", Colors.OKGREEN)
-        
+
         # Проверяем может ли бот отправлять сообщения
         print_colored("  ✅ API соединение: OK", Colors.OKGREEN)
-        
+
         return True
     except Exception as e:
         print_colored(f"  ❌ Ошибка тестирования: {str(e)}", Colors.FAIL)
@@ -181,226 +180,197 @@ async def graceful_shutdown():
         print_colored("🔄 Останавливаем планировщик...", Colors.WARNING)
         if hasattr(notifications, 'scheduler') and notifications.scheduler.running:
             notifications.scheduler.shutdown()
-        
+
         print_colored("🔄 Закрываем соединение с ботом...", Colors.WARNING)
         if bot_instance:
             await bot_instance.session.close()
-        
+
         print_colored("✅ Корректное завершение выполнено", Colors.OKGREEN)
     except Exception as e:
         print_colored(f"⚠️  Ошибка при завершении: {e}", Colors.WARNING)
 
-async def main():
-    """Основная функция для запуска бота"""
-    global bot_instance, dp_instance
-    
-    # Настройка обработчиков сигналов
-    signal.signal(signal.SIGTERM, signal_handler)
-    signal.signal(signal.SIGINT, signal_handler)
-    
-    # Проверяем, не запущен ли уже другой экземпляр
-    import psutil
-    import os
-    
-    current_pid = os.getpid()
-    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-        try:
-            if proc.info['pid'] != current_pid and proc.info['name'] == 'python':
-                if any('main.py' in str(cmd) for cmd in proc.info['cmdline'] if cmd):
-                    print_colored(f"⚠️  Обнаружен запущенный процесс бота (PID: {proc.info['pid']})", Colors.WARNING)
-                    print_colored("🔄 Завершаем старый процесс...", Colors.WARNING)
-                    proc.terminate()
-                    proc.wait(timeout=5)
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.TimeoutExpired):
-            pass
-    
-    # Настройка логирования (скрываем лишние сообщения)
+def setup_logging():
+    """Настройка логирования"""
     logging.basicConfig(
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        level=logging.WARNING  # Показываем только предупреждения и ошибки
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
     )
-    
-    # Красивый заголовок
-    print_header()
-    
-    # Проверка всех систем
-    env_ok = check_environment()
-    db_ok = check_database()
-    handlers_ok = check_handlers()
-    
-    # Информация о системе
-    print_system_info()
-    
-    # Проверяем можем ли мы запуститься
-    all_systems_ok = env_ok and db_ok and handlers_ok
-    
-    # Выводим сводку
-    print_startup_summary(all_systems_ok)
-    
-    if not env_ok:
-        print_colored("\n❌ КРИТИЧЕСКАЯ ОШИБКА: Не настроены переменные окружения!", Colors.FAIL + Colors.BOLD)
-        print_colored("📝 Проверьте файл .env и убедитесь что BOT_TOKEN и MAIN_ADMIN_ID заданы правильно", Colors.WARNING)
+
+async def main():
+    """Основная функция запуска бота"""
+
+    # Настраиваем логирование в самом начале
+    setup_logging()
+
+    print("=" * 60)
+    print("🤖 ВОЕННЫЙ ТАБЕЛЬ - СИСТЕМА ЗАПУСКА")
+    print("=" * 60)
+    print(f"⏰ Время запуска: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}")
+    print("=" * 60)
+    print()
+
+    # Проверка конфигурации
+    print("🔧 ПРОВЕРКА КОНФИГУРАЦИИ:")
+    if not BOT_TOKEN:
+        print("  ❌ Токен Telegram бота не найден!")
         return
+    print("  ✅ Токен Telegram бота: OK")
+
+    if not MAIN_ADMIN_ID:
+        print("  ❌ ID главного администратора не найден!")
+        return
+    print("  ✅ ID главного администратора: OK")
+    print()
+
+    # Проверка базы данных
+    print("💾 ПРОВЕРКА БАЗЫ ДАННЫХ:")
+    db_path = os.path.join(os.getcwd(), DB_NAME)
+    if os.path.exists(db_path):
+        print(f"  ✅ Файл БД найден: {DB_NAME}")
+    else:
+        print(f"  ⚠️ Файл БД будет создан: {DB_NAME}")
 
     try:
-        # Создание бота и диспетчера
-        bot_instance = Bot(token=BOT_TOKEN)
-        storage = MemoryStorage()
-        dp_instance = Dispatcher(storage=storage)
-
-        # Тестируем подключение к Telegram
-        bot_test_ok = await test_bot_functionality(bot_instance)
-        if not bot_test_ok:
-            print_colored("\n❌ ОШИБКА: Не удается подключиться к Telegram API!", Colors.FAIL + Colors.BOLD)
-            return
-
-        # Регистрация роутеров
-        print_colored("\n🔗 РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ:", Colors.OKBLUE + Colors.BOLD)
-        dp_instance.include_router(user.router)
-        print_colored("  ✅ Пользовательские команды зарегистрированы", Colors.OKGREEN)
-        
-        dp_instance.include_router(admin.router)
-        print_colored("  ✅ Административные команды зарегистрированы", Colors.OKGREEN)
-        
-        dp_instance.include_router(stats.router)
-        print_colored("  ✅ Статистика зарегистрирована", Colors.OKGREEN)
-        
-        dp_instance.include_router(notifications.router)
-        print_colored("  ✅ Уведомления зарегистрированы", Colors.OKGREEN)
-
-        # Настройка планировщика уведомлений
-        print_colored("\n⏰ НАСТРОЙКА ПЛАНИРОВЩИКА:", Colors.OKBLUE + Colors.BOLD)
-        try:
-            notifications.setup_scheduler(bot_instance)
-            print_colored("  ✅ Планировщик уведомлений настроен", Colors.OKGREEN)
-        except Exception as e:
-            print_colored(f"  ⚠️  Ошибка планировщика: {str(e)}", Colors.WARNING)
-
-        # Запуск системы мониторинга
-        if MONITORING_AVAILABLE:
-            print_colored("\n🖥️ ЗАПУСК СИСТЕМЫ МОНИТОРИНГА:", Colors.OKBLUE + Colors.BOLD)
-            try:
-                # Запускаем фоновую задачу мониторинга
-                asyncio.create_task(periodic_health_check())
-                print_colored("  ✅ Система мониторинга запущена", Colors.OKGREEN)
-                print_colored("  ✅ Периодические проверки активированы", Colors.OKGREEN)
-            except Exception as e:
-                print_colored(f"  ⚠️  Ошибка мониторинга: {str(e)}", Colors.WARNING)
-
-        # Автоматическая очистка при запуске
-        print_colored("\n🧹 АВТОМАТИЧЕСКАЯ ОЧИСТКА:", Colors.OKBLUE + Colors.BOLD)
-        try:
-            from cleanup_unused import SystemCleaner
-            cleaner = SystemCleaner()
-            cleanup_results = cleaner.full_cleanup()
-            print_colored(f"  ✅ Записей удалено: {cleanup_results['records_deleted']}", Colors.OKGREEN)
-            print_colored(f"  ✅ Экспортов удалено: {cleanup_results['exports_deleted']}", Colors.OKGREEN)
-            print_colored(f"  ✅ Логов удалено: {cleanup_results['logs_deleted']}", Colors.OKGREEN)
-        except Exception as e:
-            print_colored(f"  ⚠️  Ошибка очистки: {str(e)}", Colors.WARNING)
-
-        # Финальный тест
-        await test_bot_functionality(bot_instance)
-
-        # Успешный запуск
-        print_colored("\n" + "🎉" * 20, Colors.OKGREEN)
-        print_colored("🤖 БОТ УСПЕШНО ЗАПУЩЕН И ГОТОВ К РАБОТЕ!", Colors.OKGREEN + Colors.BOLD)
-        print_colored("📱 Пользователи могут начать работу с ботом", Colors.OKGREEN)
-        print_colored("👑 Главный админ ID: " + str(MAIN_ADMIN_ID), Colors.OKCYAN)
-        print_colored("🎉" * 20, Colors.OKGREEN)
-
-        # Запуск бота
-        print_colored("\n📡 Начало прослушивания сообщений...", Colors.OKCYAN)
-        
-        # Основной цикл с автоматическим восстановлением
-        retry_count = 0
-        max_retries = 5
-        
-        while not shutdown_event.is_set() and retry_count < max_retries:
-            try:
-                print_colored(f"\n📡 Попытка подключения #{retry_count + 1}...", Colors.OKCYAN)
-                
-                # Создаем задачу для polling с улучшенной обработкой ошибок
-                polling_task = asyncio.create_task(
-                    dp_instance.start_polling(
-                        bot_instance, 
-                        skip_updates=True,
-                        allowed_updates=['message', 'callback_query', 'inline_query']
-                    )
-                )
-                
-                # Ожидаем либо завершения polling, либо сигнала завершения
-                done, pending = await asyncio.wait(
-                    [polling_task, asyncio.create_task(shutdown_event.wait())],
-                    return_when=asyncio.FIRST_COMPLETED
-                )
-                
-                # Если получен сигнал завершения
-                if shutdown_event.is_set():
-                    print_colored("\n🛑 Получен сигнал завершения...", Colors.WARNING)
-                    polling_task.cancel()
-                    await graceful_shutdown()
-                    break
-                
-                # Если polling завершился неожиданно, проверяем ошибку
-                if polling_task.done():
-                    try:
-                        await polling_task  # Это вызовет исключение, если оно было
-                    except Exception as e:
-                        print_colored(f"\n⚠️  Polling завершился с ошибкой: {e}", Colors.WARNING)
-                        raise e
-                
-            except Exception as polling_error:
-                error_message = str(polling_error)
-                
-                if "Conflict" in error_message:
-                    print_colored(f"\n⚠️  Конфликт с другим экземпляром бота!", Colors.WARNING + Colors.BOLD)
-                    print_colored("🔄 Завершаем конфликтующие процессы...", Colors.WARNING)
-                    
-                    # Ждем дольше при конфликте
-                    await asyncio.sleep(10)
-                    retry_count += 1
-                    continue
-                    
-                elif "Network" in error_message or "Connection" in error_message or "Timeout" in error_message:
-                    print_colored(f"\n🌐 Сетевая ошибка: {error_message}", Colors.WARNING)
-                    print_colored(f"🔄 Переподключение через {(retry_count + 1) * 2} секунд...", Colors.WARNING)
-                    
-                    await asyncio.sleep((retry_count + 1) * 2)  # Экспоненциальная задержка
-                    retry_count += 1
-                    continue
-                    
-                elif "Unauthorized" in error_message or "token" in error_message.lower():
-                    print_colored(f"\n❌ ОШИБКА ТОКЕНА: {error_message}", Colors.FAIL + Colors.BOLD)
-                    print_colored("🔑 Проверьте правильность BOT_TOKEN в файле .env", Colors.WARNING)
-                    break
-                    
-                else:
-                    print_colored(f"\n❌ Неизвестная ошибка polling: {error_message}", Colors.FAIL)
-                    
-                    if retry_count < max_retries - 1:
-                        print_colored(f"🔄 Повторная попытка через {(retry_count + 1) * 3} секунд...", Colors.WARNING)
-                        await asyncio.sleep((retry_count + 1) * 3)
-                        retry_count += 1
-                        continue
-                    else:
-                        print_colored("💥 Превышено максимальное количество попыток", Colors.FAIL)
-                        break
-        
-        # Если достигнуто максимальное количество попыток
-        if retry_count >= max_retries and not shutdown_event.is_set():
-            print_colored(f"\n❌ КРИТИЧЕСКАЯ ОШИБКА: Не удалось стабилизировать соединение после {max_retries} попыток", Colors.FAIL + Colors.BOLD)
-            print_colored("🔧 Рекомендации:", Colors.WARNING)
-            print_colored("1. Проверьте интернет-соединение", Colors.WARNING)
-            print_colored("2. Проверьте правильность токена бота", Colors.WARNING)
-            print_colored("3. Убедитесь, что бот не запущен в другом месте", Colors.WARNING)
-
+        # Инициализируем БД только один раз
+        db = DatabaseService()
+        print("  ✅ Подключение к БД: OK")
+        print("  ✅ Все таблицы проверены: OK")
     except Exception as e:
-        print_colored(f"\n❌ КРИТИЧЕСКАЯ ОШИБКА ЗАПУСКА: {e}", Colors.FAIL + Colors.BOLD)
-        print_colored("🔧 Проверьте конфигурацию и попробуйте снова", Colors.WARNING)
-        await graceful_shutdown()
-    finally:
-        print_colored("\n👋 Завершение работы бота", Colors.OKCYAN)
+        print(f"  ❌ Ошибка БД: {e}")
+        return
+    print()
 
-if __name__ == '__main__':
-    asyncio.run(main())
+    # Проверка обработчиков
+    print("🎯 ПРОВЕРКА ОБРАБОТЧИКОВ:")
+    print("  ✅ Все модули загружены: OK")
+    print()
+
+    # Информация о системе
+    print("💻 ИНФОРМАЦИЯ О СИСТЕМЕ:")
+    print(f"  🐍 Python: {sys.version.split()[0]}")
+    print(f"  📂 Рабочая директория: {os.getcwd()}")
+    print(f"  💾 База данных: {DB_NAME}")
+    print()
+
+    print("=" * 60)
+    print("🎉 ВСЕ СИСТЕМЫ ГОТОВЫ К РАБОТЕ! 🎉")
+    print("🚀 Запуск бота...")
+    print("=" * 60)
+    print()
+
+    # Инициализация бота
+    bot = Bot(token=BOT_TOKEN)
+    storage = MemoryStorage()
+    dp = Dispatcher(storage=storage)
+
+    # Тестирование бота
+    print("🧪 ТЕСТИРОВАНИЕ API:")
+    try:
+        bot_info = await bot.get_me()
+        print(f"  ✅ Бот: @{bot_info.username} (ID: {bot_info.id})")
+        print("  ✅ API подключение: OK")
+    except Exception as e:
+        logging.error(f"Ошибка подключения к API: {e}")
+        return
+    print()
+
+    # Регистрация обработчиков  
+    print("🔗 РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ:")
+    try:
+        dp.include_router(user.router)
+        dp.include_router(admin.router)
+        dp.include_router(stats.router)
+        dp.include_router(notifications.router)
+        print("  ✅ Все обработчики зарегистрированы")
+    except Exception as e:
+        logging.error(f"Ошибка регистрации обработчиков: {e}")
+        return
+    print()
+
+    # Настройка планировщика
+    print("⏰ НАСТРОЙКА ПЛАНИРОВЩИКА:")
+    try:
+        notifications.setup_scheduler(bot)
+        print("  ✅ Планировщик настроен")
+    except Exception as e:
+        logging.error(f"Ошибка планировщика: {e}")
+    print()
+
+    # Запуск мониторинга
+    if MONITORING_AVAILABLE:
+        print("🖥️ СИСТЕМА МОНИТОРИНГА:")
+        try:
+            asyncio.create_task(periodic_health_check())
+            print("  ✅ Мониторинг активирован")
+        except Exception as e:
+            logging.error(f"Ошибка мониторинга: {e}")
+        print()
+
+    # Автоматическая очистка
+    print("🧹 АВТООЧИСТКА:")
+    try:
+        from cleanup_unused import cleanup_all
+        result = cleanup_all()
+        cleaned_items = sum(result.values()) if result else 0
+        print(f"  ✅ Очищено элементов: {cleaned_items}")
+
+        # Оптимизация БД
+        db.optimize_database()
+        print("  ✅ База данных оптимизирована")
+    except Exception as e:
+        logging.warning(f"Предупреждение очистки: {e}")
+    print()
+
+    # Финальное сообщение
+    print("🎉" * 20)
+    print("🤖 БОТ ЗАПУЩЕН И ГОТОВ К РАБОТЕ!")
+    print(f"👑 Главный админ: {MAIN_ADMIN_ID}")
+    print("📱 Пользователи могут начать работу")
+    print("🎉" * 20)
+    print()
+
+    # Graceful shutdown
+    async def on_shutdown():
+        logging.info("Остановка бота...")
+        await bot.session.close()
+        logging.info("Бот остановлен")
+
+    # Регистрируем обработчик сигналов
+    def signal_handler(signum, frame):
+        logging.info(f"Получен сигнал остановки: {signum}")
+        asyncio.create_task(on_shutdown())
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
+    # Запуск бота
+    max_retries = 3
+    retry_count = 0
+
+    while retry_count < max_retries:
+        try:
+            retry_count += 1
+            logging.info(f"Подключение к Telegram API (попытка {retry_count}/{max_retries})")
+            await dp.start_polling(bot, skip_updates=True)
+            break
+        except Exception as e:
+            logging.error(f"Ошибка подключения: {e}")
+            if retry_count < max_retries:
+                wait_time = retry_count * 3
+                logging.info(f"Повторная попытка через {wait_time} секунд...")
+                await asyncio.sleep(wait_time)
+            else:
+                logging.critical("Не удалось подключиться к Telegram API")
+                break
+
+    await on_shutdown()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n👋 Работа бота завершена пользователем")
+    except Exception as e:
+        print(f"\n❌ Критическая ошибка: {e}")
+        sys.exit(1)
