@@ -741,7 +741,7 @@ class DatabaseService:
 
             if not records or len(records) == 0:
                 logging.warning(f"Нет записей для экспорта за период: {period_description}")
-                return None
+                return self.create_empty_export_file(period_description)
 
             # Создаем DataFrame
             df = pd.DataFrame(records)
@@ -775,8 +775,13 @@ class DatabaseService:
             # Выбираем нужные колонки в правильном порядке
             df = df[['ФИО', 'Действие', 'Локация', 'Дата', 'Время']]
 
-            # Создаем имя файла с указанием периода
-            period_safe = period_description.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "-").replace(":", "")
+            # Создаем безопасное имя файла
+            import re
+            period_safe = re.sub(r'[^\w\s-]', '', period_description).strip()
+            period_safe = re.sub(r'\s+', '_', period_safe)
+            if not period_safe:
+                period_safe = "export"
+
             filename = f"military_records_{period_safe}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
             # Создаем Excel файл с улучшенным форматированием
@@ -802,7 +807,7 @@ class DatabaseService:
                     bottom=Side(style='thin')
                 )
 
-# Форматируем заголовки
+                # Форматируем заголовки
                 for cell in worksheet[1]:
                     cell.fill = header_fill
                     cell.font = header_font
@@ -811,27 +816,28 @@ class DatabaseService:
 
                 # Форматируем данные с цветовой заливкой
                 for row_num, row in enumerate(worksheet.iter_rows(min_row=2), start=2):
-                    action_cell = row[1]  # Колонка "Действие"
+                    if len(row) > 1:
+                        action_cell = row[1]  # Колонка "Действие"
 
-                    # Применяем цветовую заливку в зависимости от действия
-                    if action_cell.value == "прибыл":
-                        for cell in row:
-                            cell.fill = arrived_fill
-                    elif action_cell.value == "убыл":
-                        for cell in row:
-                            cell.fill = departed_fill
+                        # Применяем цветовую заливку в зависимости от действия
+                        if action_cell.value == "прибыл":
+                            for cell in row:
+                                cell.fill = arrived_fill
+                        elif action_cell.value == "убыл":
+                            for cell in row:
+                                cell.fill = departed_fill
 
-                    # Добавляем границы
-                    for cell in row:
-                        cell.border = border
+                        # Добавляем границы
+                        for cell in row:
+                            cell.border = border
 
                 # Автоматически подгоняем ширину колонок
                 column_widths = {
-                    'A': 0,  # ФИО
-                    'B': 0,  # Действие  
-                    'C': 0,  # Локация
-                    'D': 0,  # Дата
-                    'E': 0   # Время
+                    'A': 20,  # ФИО - минимум 20
+                    'B': 12,  # Действие - минимум 12
+                    'C': 15,  # Локация - минимум 15
+                    'D': 12,  # Дата - фиксированная ширина
+                    'E': 10   # Время - фиксированная ширина
                 }
 
                 # Определяем максимальную ширину для каждой колонки
@@ -842,16 +848,13 @@ class DatabaseService:
                             try:
                                 cell_length = len(str(cell.value)) if cell.value else 0
                                 if cell_length > column_widths[column_letter]:
-                                    column_widths[column_letter] = cell_length
+                                    column_widths[column_letter] = min(cell_length + 2, 50)  # Ограничиваем максимальную ширину
                             except:
                                 pass
 
-                # Устанавливаем ширину колонок с особыми настройками
-                worksheet.column_dimensions['A'].width = max(column_widths['A'] + 3, 20)  # ФИО - минимум 20
-                worksheet.column_dimensions['B'].width = max(column_widths['B'] + 2, 12)  # Действие - минимум 12
-                worksheet.column_dimensions['C'].width = max(column_widths['C'] + 2, 15)  # Локация - минимум 15
-                worksheet.column_dimensions['D'].width = 12  # Дата - фиксированная ширина
-                worksheet.column_dimensions['E'].width = 10  # Время - фиксированная ширина
+                # Устанавливаем ширину колонок
+                for col, width in column_widths.items():
+                    worksheet.column_dimensions[col].width = width
 
                 # Устанавливаем высоту строк
                 for row in worksheet.iter_rows():
@@ -864,6 +867,7 @@ class DatabaseService:
                     title_cell.font = Font(bold=True, size=14)
                     worksheet.merge_cells('A1:E1')
 
+            logging.info(f"Excel файл успешно создан: {filename}")
             return filename
         except Exception as e:
             logging.error(f"Ошибка экспорта записей в Excel: {e}")

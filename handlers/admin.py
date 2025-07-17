@@ -723,7 +723,8 @@ async def callback_export_action(callback: CallbackQuery):
             await callback.answer()
             return
 
-        elif export_type == "csv":
+        elif export```python
+_type == "csv":
             # CSV Export logic
             records = db.get_all_records(days=30, limit=10000)
             if records:
@@ -814,72 +815,68 @@ async def callback_export_action(callback: CallbackQuery):
             return
 
         if filename:
-            try:
-                from aiogram.types import FSInputFile
-                import os
+                    try:
+                        from aiogram.types import FSInputFile
+                        import os
 
-                if os.path.exists(filename):
-                    # Проверяем размер файла
-                    file_size = os.path.getsize(filename)
-                    if file_size > 50 * 1024 * 1024:  # 50MB лимит Telegram
+                        if os.path.exists(filename):
+                            # Проверяем размер файла
+                            file_size = os.path.getsize(filename)
+                            if file_size > 50 * 1024 * 1024:  # 50MB лимит Telegram
+                                await callback.message.edit_text(
+                                    f"❌ **Файл слишком большой**\n\n"
+                                    f"Размер файла: {file_size / (1024*1024):.1f} МБ\n"
+                                    f"Максимальный размер: 50 МБ\n\n"
+                                    f"Попробуйте экспортировать данные за меньший период.",
+                                    reply_markup=get_back_keyboard("admin_export_menu"),
+                                    parse_mode="Markdown"
+                                )
+                                try:
+                                    os.remove(filename)
+                                except:
+                                    pass
+                                return
+
+                            # Используем правильное имя файла для отправки
+                            document = FSInputFile(filename)
+                            await callback.message.answer_document(
+                                document,
+                                caption=f"📤 Экспорт: {period_text}\n📊 Размер файла: {file_size / 1024:.1f} КБ"
+                            )
+
+                            # Удаляем временный файл после отправки
+                            try:
+                                os.remove(filename)
+                            except Exception as cleanup_error:
+                                logging.warning(f"Не удалось удалить временный файл: {cleanup_error}")
+
+                            # Обновляем сообщение
+                            await callback.message.edit_text(
+                                f"✅ **Экспорт завершен**\n\n📤 Данные ({period_text}) успешно экспортированы и отправлены.",
+                                reply_markup=get_back_keyboard("admin_export_menu"),
+                                parse_mode="Markdown"
+                            )
+                            await callback.answer("✅ Файл отправлен")
+                        else:
+                            raise FileNotFoundError("Файл не найден после создания")
+                    except Exception as send_error:
+                        logging.error(f"Ошибка отправки файла: {send_error}")
                         await callback.message.edit_text(
-                            f"❌ **Файл слишком большой**\n\n"
-                            f"Размер файла: {file_size / (1024*1024):.1f} МБ\n"
-                            f"Максимальный размер: 50 МБ\n\n"
-                            f"Попробуйте экспортировать данные за меньший период.",
+                            f"❌ **Ошибка отправки файла**\n\n"
+                            f"Файл создан, но не удалось его отправить: {str(send_error)}",
                             reply_markup=get_back_keyboard("admin_export_menu"),
                             parse_mode="Markdown"
                         )
-                        os.remove(filename)
+                        await callback.answer("❌ Ошибка отправки", show_alert=True)
                         return
-
-                    document = FSInputFile(filename, filename=f"military_records_{export_type}_{datetime.now().strftime('%Y%m%d')}.xlsx")
-                    await callback.message.answer_document(
-                        document,
-                        caption=f"📤 Экспорт: {period_text}\n📊 Размер файла: {file_size / 1024:.1f} КБ"
-                    )
                 else:
-                    raise FileNotFoundError("Файл не найден после создания")
-            except Exception as send_error:
-                logging.error(f"Ошибка отправки файла: {send_error}")
-                await callback.message.edit_text(
-                    f"❌ **Ошибка отправки файла**\n\n"
-                    f"Файл создан, но не удалось его отправить: {str(send_error)}",
-                    reply_markup=get_back_keyboard("admin_export_menu"),
-                    parse_mode="Markdown"
-                )
-                await callback.answer("❌ Ошибка отправки", show_alert=True)
-                return
-
-                # Удаляем временный файл после отправки
-                try:
-                    os.remove(filename)
-                except Exception as cleanup_error:
-                    logging.warning(f"Не удалось удалить временный файл: {cleanup_error}")
-
-                # Обновляем сообщение
-                await callback.message.edit_text(
-                    f"✅ **Экспорт завершен**\n\n📤 Данные ({period_text}) успешно экспортированы и отправлены.",
-                    reply_markup=get_back_keyboard("admin_export_menu"),
-                    parse_mode="Markdown"
-                )
-                await callback.answer("✅ Файл отправлен")
-            else:
-                await callback.message.edit_text(
-                    "❌ **Ошибка создания файла**\n\n"
-                    "Не удалось создать файл экспорта.",
-                    reply_markup=get_back_keyboard("admin_export_menu"),
-                    parse_mode="Markdown"
-                )
-                await callback.answer("❌ Ошибка создания файла", show_alert=True)
-        else:
-            await callback.message.edit_text(
-                f"❌ **Нет данных для экспорта**\n\n"
-                f"За период ({period_text}) нет записей для экспорта.",
-                reply_markup=get_back_keyboard("admin_export_menu"),
-                parse_mode="Markdown"
-            )
-            await callback.answer("❌ Нет данных для экспорта", show_alert=True)
+                    await callback.message.edit_text(
+                        f"❌ **Нет данных для экспорта**\n\n"
+                        f"За период ({period_text}) нет записей для экспорта.",
+                        reply_markup=get_back_keyboard("admin_export_menu"),
+                        parse_mode="Markdown"
+                    )
+                    await callback.answer("❌ Нет данных для экспорта", show_alert=True)
 
     except Exception as e:
         logging.error(f"Ошибка экспорта: {e}")
@@ -1490,69 +1487,4 @@ async def callback_settings_action(callback: CallbackQuery):
 
             keyboard = [
                 [InlineKeyboardButton(text="🗑️ ПОДТВЕРДИТЬ ОЧИСТКУ", callback_data="settings_confirm_full_cleanup")],
-                [InlineKeyboardButton(text="🔙 Отмена", callback_data="admin_settings")]
-            ]
-
-            await callback.message.edit_text(
-                text,
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
-                parse_mode="Markdown"
-            )
-            await callback.answer()
-        elif action == "confirm_full_cleanup":
-            # Выполняем полную очистку
-            deleted_count = db.cleanup_all_records()
-            text = f"🗑️ **ПОЛНАЯ ОЧИСТКА ЗАВЕРШЕНА**\n\n"
-            text += f"Удалено ВСЕ записи: {deleted_count}\n\n"
-            text += "✅ База данных полностью очищена!"
-
-        elif action == "optimize":
-            # Оптимизация базы данных
-            db.optimize_database()
-            text = "🔄 **Оптимизация базы данных**\n\n"
-            text += "База данных оптимизирована.\n"
-            text += "Повышена производительность системы."
-
-        elif action == "db" and "stats" in callback.data:
-            # Получаем статистику по базе данных
-            try:
-                stats = db.get_database_stats()
-                text = "📊 **Статистика базы данных**\n\n"
-                text += f"Размер базы данных: {stats.get('size', 'N/A')}\n"
-                text += f"Количество таблиц: {stats.get('tables', 'N/A')}\n"
-                text += f"Количество записей: {stats.get('records', 'N/A')}\n\n"
-                text += "ℹ️ Информация о базе данных."
-            except:
-                text = "📊 **Статистика базы данных**\n\n"
-                text += "Информация временно недоступна."
-
-        elif action == "system" and "info" in callback.data:
-            # Собираем системную информацию
-            import platform
-            text = "⚙️ **Системная информация**\n\n"
-            text += f"Версия Python: {platform.python_version()}\n"
-            text += f"Операционная система: {platform.system()} {platform.release()}\n"
-            text += f"CPU: {platform.processor()}\n\n"
-            text += "Информация о системе."
-
-        elif action == "technical":
-            text = "🛠️ **Технические настройки**\n\n"
-            text += "Здесь можно настроить:\n"
-            text += "• Параметры подключения к БД\n"
-            text += "• Настройки логирования\n"
-            text += "• Размеры кэша\n\n"
-            text += "⚠️ Будьте осторожны, изменяя эти параметры."
-
-        else:
-            text = "⚙️ Функция в разработке"
-
-        await callback.message.edit_text(
-            text,
-            reply_markup=get_back_keyboard("admin_settings"),
-            parse_mode="Markdown"
-        )
-        await callback.answer()
-
-    except Exception as e:
-        logging.error(f"Ошибка в settings_action: {e}")
-        await callback.answer("❌ Ошибка выполнения действия", show_alert=True)
+                [InlineKeyboardButton(text="🔙 Отмена", callback_data
