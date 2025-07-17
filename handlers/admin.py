@@ -7,6 +7,7 @@ from services.db_service import DatabaseService
 from config import MAIN_ADMIN_ID
 import logging
 from datetime import datetime, timedelta
+from monitoring import monitor, advanced_logger, get_system_status
 
 # Проверяем наличие необходимых библиотек для экспорта
 try:
@@ -48,6 +49,9 @@ def get_admin_panel_keyboard(is_main_admin: bool = False):
         ],
         [
             InlineKeyboardButton(text="🔔 Уведомления", callback_data="admin_notifications"),
+            InlineKeyboardButton(text="🖥️ Мониторинг", callback_data="admin_monitoring")
+        ],
+        [
             InlineKeyboardButton(text="⚙️ Настройки", callback_data="admin_settings")
         ]
     ]
@@ -1490,4 +1494,199 @@ async def callback_settings_action(callback: CallbackQuery):
 
     except Exception as e:
         logging.error(f"Ошибка в settings_action: {e}")
+        await callback.answer("❌ Ошибка выполнения действия", show_alert=True)
+
+
+@router.callback_query(F.data == "admin_monitoring")
+async def callback_admin_monitoring(callback: CallbackQuery):
+    """Системный мониторинг"""
+    user_id = callback.from_user.id
+    if not await is_admin(user_id):
+        await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+        return
+
+    try:
+        # Инкрементируем счетчик запросов
+        monitor.increment_request(True)
+        
+        # Получаем статус системы
+        status_text = get_system_status()
+        
+        keyboard = [
+            [
+                InlineKeyboardButton(text="🔄 Обновить", callback_data="admin_monitoring"),
+                InlineKeyboardButton(text="🧹 Очистить логи", callback_data="monitoring_clear_logs")
+            ],
+            [
+                InlineKeyboardButton(text="📊 Детальная статистика", callback_data="monitoring_detailed"),
+                InlineKeyboardButton(text="⚠️ Лог ошибок", callback_data="monitoring_errors")
+            ],
+            [
+                InlineKeyboardButton(text="🏥 Проверка здоровья", callback_data="monitoring_health"),
+                InlineKeyboardButton(text="🔧 Техобслуживание", callback_data="monitoring_maintenance")
+            ],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_panel")]
+        ]
+
+        await callback.message.edit_text(
+            f"🖥️ **Системный мониторинг**\n\n{status_text}",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+            parse_mode="Markdown"
+        )
+        await callback.answer()
+
+    except Exception as e:
+        monitor.increment_request(False)
+        advanced_logger.log_error_with_context(e, "admin_monitoring")
+        await callback.answer("❌ Ошибка получения данных мониторинга", show_alert=True)
+
+@router.callback_query(F.data.startswith("monitoring_"))
+async def callback_monitoring_action(callback: CallbackQuery):
+    """Действия мониторинга"""
+    user_id = callback.from_user.id
+    if not await is_admin(user_id):
+        await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+        return
+
+    action = callback.data.split("_")[-1]
+
+    try:
+        if action == "detailed":
+            # Детальная статистика
+            health = monitor.get_health_status()
+            metrics = health['metrics']
+            
+            text = f"📊 **Детальная статистика системы**\n\n"
+            text += f"🚀 **Производительность:**\n"
+            text += f"• Процессор: {metrics['cpu_usage']:.1f}%\n"
+            text += f"• Память системы: {metrics['memory_usage']:.1f}%\n"
+            text += f"• Память процесса: {metrics['process_memory']:.1f} MB\n"
+            text += f"• Доступно памяти: {metrics['memory_available']:.1f} GB\n\n"
+            
+            text += f"💾 **База данных:**\n"
+            text += f"• Размер файла: {metrics['database_size']} MB\n"
+            text += f"• Всего пользователей: {metrics['total_users']}\n"
+            text += f"• Записей сегодня: {metrics['records_today']}\n\n"
+            
+            text += f"📡 **Сетевая активность:**\n"
+            text += f"• Всего запросов: {metrics['total_requests']}\n"
+            text += f"• Успешных: {metrics['successful_requests']}\n"
+            text += f"• Ошибок: {metrics['failed_requests']}\n"
+            text += f"• Процент успеха: {(metrics['successful_requests'] / max(metrics['total_requests'], 1) * 100):.1f}%\n\n"
+            
+            text += f"⏱️ **Время работы:** {metrics['uptime']}"
+
+        elif action == "errors":
+            # Лог ошибок
+            text = f"⚠️ **Лог последних ошибок**\n\n"
+            
+            try:
+                # Читаем последние ошибки из файла
+                if os.path.exists('logs/errors.log'):
+                    with open('logs/errors.log', 'r', encoding='utf-8') as f:
+                        lines = f.readlines()
+                        recent_errors = lines[-10:]  # Последние 10 ошибок
+                        
+                    if recent_errors:
+                        for line in recent_errors:
+                            if line.strip():
+                                text += f"• {line.strip()}\n"
+                    else:
+                        text += "✅ Ошибок не найдено"
+                else:
+                    text += "📝 Файл логов не найден"
+            except Exception as e:
+                text += f"❌ Ошибка чтения логов: {e}"
+
+        elif action == "health":
+            # Проверка здоровья
+            health = monitor.get_health_status()
+            
+            status_emoji = {
+                'healthy': '🟢',
+                'warning': '🟡',
+                'critical': '🔴'
+            }
+            
+            text = f"🏥 **Проверка здоровья системы**\n\n"
+            text += f"{status_emoji[health['status']]} **Общий статус:** {health['status'].upper()}\n\n"
+            
+            if health['issues']:
+                text += f"⚠️ **Обнаруженные проблемы:**\n"
+                for issue in health['issues']:
+                    text += f"• {issue}\n"
+                text += "\n"
+                
+                text += f"🔧 **Рекомендации:**\n"
+                if "память" in str(health['issues']).lower():
+                    text += "• Выполните очистку старых записей\n"
+                    text += "• Оптимизируйте базу данных\n"
+                if "cpu" in str(health['issues']).lower():
+                    text += "• Проверьте активные процессы\n"
+                    text += "• Рассмотрите возможность перезапуска\n"
+                if "база данных" in str(health['issues']).lower():
+                    text += "• Выполните архивирование старых данных\n"
+                    text += "• Проведите оптимизацию таблиц\n"
+            else:
+                text += "✅ **Все системы работают нормально**\n\n"
+                text += "📋 **Выполненные проверки:**\n"
+                text += "• Использование памяти: ✅\n"
+                text += "• Нагрузка на CPU: ✅\n"
+                text += "• Размер базы данных: ✅\n"
+                text += "• Недавние ошибки: ✅\n"
+
+        elif action == "maintenance":
+            # Техническое обслуживание
+            text = f"🔧 **Техническое обслуживание**\n\n"
+            text += f"Доступные операции:\n\n"
+            text += f"🧹 **Автоматическая очистка:**\n"
+            text += f"• Очистка логов старше 30 дней\n"
+            text += f"• Удаление старых записей\n"
+            text += f"• Оптимизация базы данных\n\n"
+            text += f"📊 **Статистика обслуживания:**\n"
+            
+            # Выполняем автоочистку
+            await monitor.cleanup_if_needed()
+            
+            text += f"• Последняя очистка: сейчас\n"
+            text += f"• Статус: ✅ Выполнено\n"
+
+        elif action == "logs" and "clear" in callback.data:
+            # Очистка логов
+            text = f"🧹 **Очистка логов**\n\n"
+            
+            try:
+                logs_cleared = 0
+                for log_file in ['logs/bot.log', 'logs/errors.log']:
+                    if os.path.exists(log_file):
+                        # Оставляем только последние 1000 строк
+                        with open(log_file, 'r', encoding='utf-8') as f:
+                            lines = f.readlines()
+                        
+                        if len(lines) > 1000:
+                            with open(log_file, 'w', encoding='utf-8') as f:
+                                f.writelines(lines[-1000:])
+                            logs_cleared += len(lines) - 1000
+                
+                text += f"✅ Очищено записей: {logs_cleared}\n"
+                text += f"📝 Сохранены последние 1000 строк в каждом файле\n\n"
+                text += f"⏰ Время очистки: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"
+                
+                advanced_logger.log_system_event("LOG_CLEANUP", f"Cleared {logs_cleared} log entries")
+                
+            except Exception as e:
+                text += f"❌ Ошибка очистки: {e}"
+
+        else:
+            text = "⚙️ Функция в разработке"
+
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_back_keyboard("admin_monitoring"),
+            parse_mode="Markdown"
+        )
+        await callback.answer()
+
+    except Exception as e:
+        advanced_logger.log_error_with_context(e, f"monitoring_action_{action}")
         await callback.answer("❌ Ошибка выполнения действия", show_alert=True)

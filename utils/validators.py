@@ -1,133 +1,218 @@
 
-# utils/validators.py
 import re
-import logging
+import unicodedata
+from typing import Optional
 
-def validate_full_name(name: str) -> tuple[bool, str]:
-    """
-    Валидация ФИО с детальными проверками
-    Возвращает (True/False, сообщение об ошибке)
-    """
-    if not name or not isinstance(name, str):
-        return False, "ФИО не может быть пустым"
+def validate_full_name(full_name: str) -> bool:
+    """Валидация ФИО в формате 'Фамилия И.О.'"""
+    if not isinstance(full_name, str):
+        return False
     
-    name = name.strip()
+    # Убираем лишние пробелы
+    full_name = full_name.strip()
     
-    # Проверка длины
-    if len(name) < 5:
-        return False, "ФИО слишком короткое (минимум 5 символов)"
+    # Проверяем длину
+    if len(full_name) < 5 or len(full_name) > 50:
+        return False
     
-    if len(name) > 50:
-        return False, "ФИО слишком длинное (максимум 50 символов)"
+    # Паттерн для проверки формата: Фамилия И.О.
+    # Поддерживаем кириллицу и латиницу
+    pattern = r'^[А-ЯЁA-Z][а-яёa-z]+\s[А-ЯЁA-Z]\.[А-ЯЁA-Z]\.$'
     
-    # Проверка на недопустимые символы
-    if re.search(r'[0-9<>&"\'`]', name):
-        return False, "ФИО не должно содержать цифры или специальные символы"
-    
-    # Проверка на множественные пробелы
-    if re.search(r'\s{2,}', name):
-        return False, "ФИО не должно содержать множественные пробелы"
-    
-    # Основная проверка формата: Фамилия И.О.
-    pattern = r'^[А-ЯЁ][а-яё]+ [А-ЯЁ]\.[А-ЯЁ]\.$'
-    if not re.match(pattern, name):
-        return False, "Неверный формат! Используйте: Фамилия И.О. (например: Иванов И.И.)"
-    
-    # Дополнительные проверки
-    parts = name.split(' ')
-    if len(parts) != 2:
-        return False, "ФИО должно состоять из фамилии и инициалов через пробел"
-    
-    surname, initials = parts
-    
-    # Проверка фамилии
-    if len(surname) < 2:
-        return False, "Фамилия слишком короткая (минимум 2 символа)"
-    
-    if len(surname) > 30:
-        return False, "Фамилия слишком длинная (максимум 30 символов)"
-    
-    # Проверка что фамилия содержит только русские буквы
-    if not re.match(r'^[А-ЯЁ][а-яё]+$', surname):
-        return False, "Фамилия должна содержать только русские буквы и начинаться с заглавной"
-    
-    # Проверка инициалов
-    if not re.match(r'^[А-ЯЁ]\.[А-ЯЁ]\.$', initials):
-        return False, "Инициалы должны быть в формате И.О. (заглавные буквы через точку)"
-    
-    # Проверка на подозрительные комбинации
-    suspicious_patterns = [
-        r'[аеиоуыэюя]{4,}',  # Слишком много гласных подряд
-        r'[бвгджзклмнпрстфхцчшщ]{4,}',  # Слишком много согласных подряд
-    ]
-    
-    for pattern in suspicious_patterns:
-        if re.search(pattern, surname.lower()):
-            return False, "Фамилия содержит подозрительную комбинацию букв"
-    
-    # Проверка на запрещенные слова (можно расширить список)
-    forbidden_words = ['тест', 'test', 'админ', 'admin', 'бот', 'bot']
-    for word in forbidden_words:
-        if word in surname.lower():
-            return False, f"Фамилия не может содержать слово '{word}'"
-    
-    return True, ""
+    return bool(re.match(pattern, full_name))
 
-def normalize_full_name(name: str) -> str:
-    """Нормализация ФИО (удаление лишних пробелов, приведение к правильному регистру)"""
-    if not name:
+def suggest_full_name_correction(full_name: str) -> Optional[str]:
+    """Предложить исправление ФИО"""
+    if not isinstance(full_name, str):
+        return None
+    
+    # Убираем лишние пробелы
+    full_name = full_name.strip()
+    
+    if not full_name:
+        return None
+    
+    # Пытаемся автоматически исправить
+    parts = full_name.split()
+    
+    if len(parts) >= 2:
+        surname = parts[0]
+        rest = ' '.join(parts[1:])
+        
+        # Исправляем регистр фамилии
+        surname = surname.capitalize()
+        
+        # Пытаемся найти инициалы в остальной части
+        initials_match = re.findall(r'[А-ЯЁA-Z]', rest.upper())
+        
+        if len(initials_match) >= 2:
+            # Берем первые две буквы как инициалы
+            initial1 = initials_match[0]
+            initial2 = initials_match[1]
+            corrected = f"{surname} {initial1}.{initial2}."
+            
+            # Проверяем, что исправленная версия валидна
+            if validate_full_name(corrected):
+                return corrected
+    
+    # Если автоисправление не помогло, предлагаем шаблон
+    if len(parts) == 1 and len(parts[0]) > 2:
+        return f"{parts[0].capitalize()} И.И."
+    
+    return None
+
+def normalize_full_name(full_name: str) -> str:
+    """Нормализация ФИО"""
+    if not isinstance(full_name, str):
+        return full_name
+    
+    # Убираем лишние пробелы
+    full_name = ' '.join(full_name.split())
+    
+    # Нормализуем Unicode символы
+    full_name = unicodedata.normalize('NFKC', full_name)
+    
+    return full_name
+
+def validate_location(location: str) -> bool:
+    """Валидация локации"""
+    if not isinstance(location, str):
+        return False
+    
+    location = location.strip()
+    
+    # Проверяем длину
+    if len(location) < 2 or len(location) > 50:
+        return False
+    
+    # Проверяем на недопустимые символы
+    forbidden_chars = ['<', '>', '&', '"', "'", '\n', '\r', '\t']
+    if any(char in location for char in forbidden_chars):
+        return False
+    
+    # Проверяем, что не состоит только из пробелов или цифр
+    if location.isspace() or location.isdigit():
+        return False
+    
+    return True
+
+def sanitize_input(text: str, max_length: int = 100) -> str:
+    """Очистка пользовательского ввода"""
+    if not isinstance(text, str):
         return ""
     
     # Убираем лишние пробелы
-    name = ' '.join(name.split())
+    text = text.strip()
     
-    # Приводим к правильному регистру
-    parts = name.split(' ')
-    if len(parts) >= 1:
-        # Фамилия: первая буква заглавная, остальные строчные
-        surname = parts[0]
-        if surname:
-            parts[0] = surname[0].upper() + surname[1:].lower()
+    # Ограничиваем длину
+    if len(text) > max_length:
+        text = text[:max_length]
     
-    if len(parts) >= 2:
-        # Инициалы: все заглавные
-        initials = parts[1]
-        parts[1] = initials.upper()
+    # Нормализуем Unicode
+    text = unicodedata.normalize('NFKC', text)
     
-    return ' '.join(parts)
+    # Убираем потенциально опасные символы
+    forbidden_chars = ['<', '>', '&', '"', "'"]
+    for char in forbidden_chars:
+        text = text.replace(char, '')
+    
+    return text
 
-def suggest_full_name_correction(name: str) -> str:
-    """Предложение исправления для неправильного ФИО"""
-    if not name:
-        return "Введите ФИО в формате: Фамилия И.О."
+def validate_time_format(time_str: str) -> bool:
+    """Валидация формата времени HH:MM"""
+    if not isinstance(time_str, str):
+        return False
     
-    # Нормализуем имя
-    normalized = normalize_full_name(name)
+    pattern = r'^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
+    return bool(re.match(pattern, time_str))
+
+def validate_user_id(user_id) -> bool:
+    """Валидация Telegram user ID"""
+    try:
+        user_id = int(user_id)
+        return 1 <= user_id <= 2147483647  # Максимальный int32
+    except (ValueError, TypeError):
+        return False
+
+def format_phone_number(phone: str) -> Optional[str]:
+    """Форматирование номера телефона"""
+    if not isinstance(phone, str):
+        return None
     
-    # Если после нормализации стало валидным
-    is_valid, _ = validate_full_name(normalized)
-    if is_valid:
-        return f"Возможно, вы имели в виду: {normalized}"
+    # Убираем все нецифровые символы
+    digits = re.sub(r'\D', '', phone)
     
-    # Попытка автокоррекции частых ошибок
-    corrected = name.strip()
+    # Проверяем длину
+    if len(digits) == 11 and digits.startswith('8'):
+        # Заменяем 8 на +7
+        return f"+7{digits[1:]}"
+    elif len(digits) == 11 and digits.startswith('7'):
+        return f"+{digits}"
+    elif len(digits) == 10:
+        return f"+7{digits}"
     
-    # Убираем лишние пробелы
-    corrected = ' '.join(corrected.split())
+    return None
+
+def validate_date_string(date_str: str) -> bool:
+    """Валидация строки даты в формате DD.MM.YYYY"""
+    if not isinstance(date_str, str):
+        return False
     
-    # Если нет точек в инициалах, добавляем их
-    parts = corrected.split(' ')
-    if len(parts) == 2:
-        surname, initials_part = parts
-        # Если инициалы без точек (например: "ИИ" вместо "И.И.")
-        if len(initials_part) == 2 and initials_part.isalpha():
-            corrected = f"{surname} {initials_part[0]}.{initials_part[1]}."
+    pattern = r'^([0-2][0-9]|3[01])\.(0[1-9]|1[0-2])\.(\d{4})$'
+    match = re.match(pattern, date_str)
     
-    # Приводим к правильному регистру
-    corrected = normalize_full_name(corrected)
+    if not match:
+        return False
     
-    is_valid, _ = validate_full_name(corrected)
-    if is_valid:
-        return f"Возможно, вы имели в виду: {corrected}"
+    day, month, year = map(int, match.groups())
     
-    return "Проверьте формат: Фамилия И.О. (например: Иванов И.И.)"
+    # Базовая проверка дат
+    if day < 1 or day > 31:
+        return False
+    if month < 1 or month > 12:
+        return False
+    if year < 2020 or year > 2030:  # Разумные границы для военного табеля
+        return False
+    
+    # Проверка дней в месяце
+    days_in_month = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    if day > days_in_month[month - 1]:
+        return False
+    
+    # Проверка високосного года для февраля
+    if month == 2 and day == 29:
+        if not (year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)):
+            return False
+    
+    return True
+
+def clean_filename(filename: str) -> str:
+    """Очистка имени файла от недопустимых символов"""
+    if not isinstance(filename, str):
+        return "unnamed_file"
+    
+    # Убираем недопустимые символы для имени файла
+    forbidden_chars = ['<', '>', ':', '"', '/', '\\', '|', '?', '*']
+    for char in forbidden_chars:
+        filename = filename.replace(char, '_')
+    
+    # Убираем лишние пробелы и заменяем на подчеркивания
+    filename = '_'.join(filename.split())
+    
+    # Ограничиваем длину
+    if len(filename) > 100:
+        name, ext = filename.rsplit('.', 1) if '.' in filename else (filename, '')
+        name = name[:95]
+        filename = f"{name}.{ext}" if ext else name
+    
+    return filename if filename else "unnamed_file"
+
+# Константы для валидации
+MAX_USERNAME_LENGTH = 50
+MAX_FULL_NAME_LENGTH = 50
+MAX_LOCATION_LENGTH = 50
+MAX_COMMENT_LENGTH = 200
+
+# Регулярные выражения
+TELEGRAM_USERNAME_PATTERN = r'^[a-zA-Z0-9_]{5,32}$'
+SAFE_TEXT_PATTERN = r'^[a-zA-Zа-яёА-ЯЁ0-9\s\.\,\!\?\-\(\)]*$'

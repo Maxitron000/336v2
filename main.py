@@ -12,6 +12,15 @@ from config import BOT_TOKEN, MAIN_ADMIN_ID, DB_NAME
 from datetime import datetime
 import sys
 
+# Импортируем систему мониторинга
+try:
+    from monitoring import monitor, advanced_logger, periodic_health_check
+    MONITORING_AVAILABLE = True
+    print("✅ Система мониторинга загружена")
+except ImportError as e:
+    MONITORING_AVAILABLE = False
+    print(f"⚠️ Система мониторинга недоступна: {e}")
+
 # Цветные коды для консоли
 class Colors:
     HEADER = '\033[95m'
@@ -267,6 +276,17 @@ async def main():
         except Exception as e:
             print_colored(f"  ⚠️  Ошибка планировщика: {str(e)}", Colors.WARNING)
 
+        # Запуск системы мониторинга
+        if MONITORING_AVAILABLE:
+            print_colored("\n🖥️ ЗАПУСК СИСТЕМЫ МОНИТОРИНГА:", Colors.OKBLUE + Colors.BOLD)
+            try:
+                # Запускаем фоновую задачу мониторинга
+                asyncio.create_task(periodic_health_check())
+                print_colored("  ✅ Система мониторинга запущена", Colors.OKGREEN)
+                print_colored("  ✅ Периодические проверки активированы", Colors.OKGREEN)
+            except Exception as e:
+                print_colored(f"  ⚠️  Ошибка мониторинга: {str(e)}", Colors.WARNING)
+
         # Автоматическая очистка при запуске
         print_colored("\n🧹 АВТОМАТИЧЕСКАЯ ОЧИСТКА:", Colors.OKBLUE + Colors.BOLD)
         try:
@@ -292,39 +312,88 @@ async def main():
         # Запуск бота
         print_colored("\n📡 Начало прослушивания сообщений...", Colors.OKCYAN)
         
-        try:
-            # Создаем задачу для polling
-            polling_task = asyncio.create_task(dp_instance.start_polling(bot_instance, skip_updates=True))
-            
-            # Ожидаем либо завершения polling, либо сигнала завершения
-            done, pending = await asyncio.wait(
-                [polling_task, asyncio.create_task(shutdown_event.wait())],
-                return_when=asyncio.FIRST_COMPLETED
-            )
-            
-            # Если получен сигнал завершения
-            if shutdown_event.is_set():
-                print_colored("\n🛑 Получен сигнал завершения...", Colors.WARNING)
-                polling_task.cancel()
-                await graceful_shutdown()
-            
-        except Exception as polling_error:
-            if "Conflict" in str(polling_error):
-                print_colored(f"\n⚠️  Конфликт с другим экземпляром бота!", Colors.WARNING + Colors.BOLD)
-                print_colored("🔄 Попытка перезапуска через 5 секунд...", Colors.WARNING)
-                await asyncio.sleep(5)
-                # Повторная попытка запуска
-                polling_task = asyncio.create_task(dp_instance.start_polling(bot_instance, skip_updates=True))
+        # Основной цикл с автоматическим восстановлением
+        retry_count = 0
+        max_retries = 5
+        
+        while not shutdown_event.is_set() and retry_count < max_retries:
+            try:
+                print_colored(f"\n📡 Попытка подключения #{retry_count + 1}...", Colors.OKCYAN)
+                
+                # Создаем задачу для polling с улучшенной обработкой ошибок
+                polling_task = asyncio.create_task(
+                    dp_instance.start_polling(
+                        bot_instance, 
+                        skip_updates=True,
+                        allowed_updates=['message', 'callback_query', 'inline_query']
+                    )
+                )
+                
+                # Ожидаем либо завершения polling, либо сигнала завершения
                 done, pending = await asyncio.wait(
                     [polling_task, asyncio.create_task(shutdown_event.wait())],
                     return_when=asyncio.FIRST_COMPLETED
                 )
+                
+                # Если получен сигнал завершения
                 if shutdown_event.is_set():
+                    print_colored("\n🛑 Получен сигнал завершения...", Colors.WARNING)
                     polling_task.cancel()
                     await graceful_shutdown()
-            else:
-                print_colored(f"\n❌ Ошибка polling: {polling_error}", Colors.FAIL)
-                raise polling_error
+                    break
+                
+                # Если polling завершился неожиданно, проверяем ошибку
+                if polling_task.done():
+                    try:
+                        await polling_task  # Это вызовет исключение, если оно было
+                    except Exception as e:
+                        print_colored(f"\n⚠️  Polling завершился с ошибкой: {e}", Colors.WARNING)
+                        raise e
+                
+            except Exception as polling_error:
+                error_message = str(polling_error)
+                
+                if "Conflict" in error_message:
+                    print_colored(f"\n⚠️  Конфликт с другим экземпляром бота!", Colors.WARNING + Colors.BOLD)
+                    print_colored("🔄 Завершаем конфликтующие процессы...", Colors.WARNING)
+                    
+                    # Ждем дольше при конфликте
+                    await asyncio.sleep(10)
+                    retry_count += 1
+                    continue
+                    
+                elif "Network" in error_message or "Connection" in error_message or "Timeout" in error_message:
+                    print_colored(f"\n🌐 Сетевая ошибка: {error_message}", Colors.WARNING)
+                    print_colored(f"🔄 Переподключение через {(retry_count + 1) * 2} секунд...", Colors.WARNING)
+                    
+                    await asyncio.sleep((retry_count + 1) * 2)  # Экспоненциальная задержка
+                    retry_count += 1
+                    continue
+                    
+                elif "Unauthorized" in error_message or "token" in error_message.lower():
+                    print_colored(f"\n❌ ОШИБКА ТОКЕНА: {error_message}", Colors.FAIL + Colors.BOLD)
+                    print_colored("🔑 Проверьте правильность BOT_TOKEN в файле .env", Colors.WARNING)
+                    break
+                    
+                else:
+                    print_colored(f"\n❌ Неизвестная ошибка polling: {error_message}", Colors.FAIL)
+                    
+                    if retry_count < max_retries - 1:
+                        print_colored(f"🔄 Повторная попытка через {(retry_count + 1) * 3} секунд...", Colors.WARNING)
+                        await asyncio.sleep((retry_count + 1) * 3)
+                        retry_count += 1
+                        continue
+                    else:
+                        print_colored("💥 Превышено максимальное количество попыток", Colors.FAIL)
+                        break
+        
+        # Если достигнуто максимальное количество попыток
+        if retry_count >= max_retries and not shutdown_event.is_set():
+            print_colored(f"\n❌ КРИТИЧЕСКАЯ ОШИБКА: Не удалось стабилизировать соединение после {max_retries} попыток", Colors.FAIL + Colors.BOLD)
+            print_colored("🔧 Рекомендации:", Colors.WARNING)
+            print_colored("1. Проверьте интернет-соединение", Colors.WARNING)
+            print_colored("2. Проверьте правильность токена бота", Colors.WARNING)
+            print_colored("3. Убедитесь, что бот не запущен в другом месте", Colors.WARNING)
 
     except Exception as e:
         print_colored(f"\n❌ КРИТИЧЕСКАЯ ОШИБКА ЗАПУСКА: {e}", Colors.FAIL + Colors.BOLD)

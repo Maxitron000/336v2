@@ -1,44 +1,65 @@
 
-run = "python main.py"
-language = "python3"
-modules = ["python-3.12", "nix"]
-
-[deployment]
-run = ["sh", "-c", "python main.py"]
+modules = ["python-3.12"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["glibcLocales"]
 
 [workflows]
-runButton = "Run Bot Fixed"
 
-[[workflows.workflow]]
+[workflows.runBot]
 name = "Run Bot"
-author = 44716284
-mode = "sequential"
+author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python main.py"
+[workflows.runBot.metadata]
+agentRequireRestartOnSave = false
 
-[[workflows.workflow]]
+[workflows.runBot.tasks]
+
+[workflows.runBot.tasks.runbot]
+name = "runbot"
+runInBackground = true
+
+[workflows.runBot.tasks.runbot.exec]
+program = "python"
+args = ["main.py"]
+
+[workflows.runWebInterface]
 name = "Run Web Interface"
-author = 44716284
-mode = "sequential"
+author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python web_interface.py"
+[workflows.runWebInterface.metadata]
+agentRequireRestartOnSave = false
 
-[[workflows.workflow]]
+[workflows.runWebInterface.tasks]
+
+[workflows.runWebInterface.tasks.runweb]
+name = "runweb"
+runInBackground = true
+
+[workflows.runWebInterface.tasks.runweb.exec]
+program = "python"
+args = ["web_interface.py"]
+
+[workflows."Run Bot Fixed"]
 name = "Run Bot Fixed"
-author = 44716284
-mode = "parallel"
+author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python main.py"
+[workflows."Run Bot Fixed".metadata]
+agentRequireRestartOnSave = false
+
+[workflows."Run Bot Fixed".tasks]
+
+[workflows."Run Bot Fixed".tasks.bot]
+name = "bot"
+runInBackground = false
+
+[workflows."Run Bot Fixed".tasks.bot.exec]
+program = "python"
+args = ["main.py"]
+
+[deployment]
+run = ["python", "main.py"]
+deploymentTarget = "autoscale"
 
 [[ports]]
 localPort = 5000
