@@ -46,28 +46,7 @@ def get_journal_keyboard():
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-def get_journal_keyboard_with_pagination(current_page: int, total_pages: int):
-    """Создать клавиатуру журнала с пагинацией"""
-    keyboard = []
-
-    # Кнопки пагинации
-    if total_pages > 1:
-        pagination_row = []
-
-        if current_page > 1:
-            pagination_row.append(InlineKeyboardButton(text="⬅️ Пред", callback_data=f"journal_page_{current_page - 1}"))
-
-        pagination_row.append(InlineKeyboardButton(text=f"{current_page}/{total_pages}", callback_data="journal_info"))
-
-        if current_page < total_pages:
-            pagination_row.append(InlineKeyboardButton(text="След ➡️", callback_data=f"journal_page_{current_page + 1}"))
-
-        keyboard.append(pagination_row)
-
-    # Кнопка назад
-    keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")])
-
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+# Пагинация журнала убрана - показываем максимум 10 записей без пагинации
 
 def get_location_keyboard_with_pagination(action: str, current_page: int = 1):
     """Создать клавиатуру локаций с пагинацией"""
@@ -115,6 +94,8 @@ def get_location_keyboard_with_pagination(action: str, current_page: int = 1):
 @router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext):
     """Обработчик команды /start"""
+    from aiogram.types import ReplyKeyboardRemove
+    
     user = message.from_user
     user_id = user.id
     username = user.username or f"user_{user_id}"
@@ -129,7 +110,8 @@ async def cmd_start(message: Message, state: FSMContext):
             "🎖️ Добро пожаловать в систему электронного табеля!\n\n"
             "Для регистрации введите ваше ФИО в формате:\n"
             "Фамилия И.О.\n\n"
-            "Пример: Иванов И.И."
+            "Пример: Иванов И.И.",
+            reply_markup=ReplyKeyboardRemove()
         )
         return
 
@@ -380,7 +362,7 @@ async def callback_action_selection(callback: CallbackQuery):
                     "⚠️ Вы уже отмечены как отсутствующий!\n"
                     f"📍 Текущая локация: {last_records[0]['location']}\n"
                     "⏰ Последняя отметка: " + datetime.fromisoformat(last_records[0]['timestamp'].replace('Z', '+00:00')).strftime('%d.%m.%Y %H:%M') + "\n\n"
-                    "❗ Сначала прибудьте в часть, а затем снова убудьте."
+                    "❗ Сначала прибудьте в часть, а затем снова убейте."
                 )
                 await asyncio.sleep(3)
                 is_admin = db.is_admin(user_id) or user_id == MAIN_ADMIN_ID
@@ -562,65 +544,11 @@ async def cmd_journal(message: Message, state: FSMContext):
         logging.error(f"Ошибка получения журнала: {e}")
         await message.answer("❌ Ошибка при получении журнала. Попробуйте позже.")
 
-@router.callback_query(F.data.startswith("journal_page_"))
-async def handle_journal_pagination(callback: CallbackQuery, state: FSMContext):
-    """Обработка пагинации журнала"""
-    try:
-        page = int(callback.data.split("_")[2])
-        user_id = callback.from_user.id
-        per_page = 5
-
-        data = db.get_user_records_paginated(user_id, page, per_page)
-
-        if not data['records']:
-            await callback.message.edit_text("📋 У вас пока нет записей в журнале.")
-            await callback.answer()
-            return
-
-        # Формируем текст журнала
-        text = f"📋 Мой журнал (стр. {data['current_page']}/{data['total_pages']}):\n\n"
-
-        for record in data['records']:
-            timestamp = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
-            formatted_time = timestamp.strftime('%d.%m.%Y %H:%M')
-
-            if record['action'] == 'не в части':
-                action_emoji = "🚶"
-                action_text = "убыл"
-            else:
-                action_emoji = "🏠"
-                action_text = "прибыл"
-
-            text += f"{action_emoji} {action_text} - {record['location']}\n"
-            text += f"⏰ {formatted_time}\n\n"
-
-        # Создаем клавиатуру для пагинации
-        keyboard = []
-        nav_buttons = []
-
-        if data['has_prev']:
-            nav_buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"journal_page_{page-1}"))
-
-        if data['has_next']:
-            nav_buttons.append(InlineKeyboardButton("➡️ Далее", callback_data=f"journal_page_{page+1}"))
-
-        if nav_buttons:
-            keyboard.append(nav_buttons)
-
-        keyboard.append([InlineKeyboardButton("🔙 Главное меню", callback_data="main_menu")])
-
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await callback.message.edit_text(text, reply_markup=reply_markup)
-        await callback.answer()
-
-    except Exception as e:
-        logging.error(f"Ошибка пагинации журнала: {e}")
-        await callback.message.edit_text("❌ Ошибка при получении журнала.")
-        await callback.answer()
+# Убираем пагинацию журнала - не нужна для максимум 10 записей
 
 @router.callback_query(F.data == "show_journal")
 async def callback_show_journal(callback: CallbackQuery):
-    """Показать журнал пользователя с пагинацией"""
+    """Показать журнал пользователя"""
     try:
         user_id = callback.from_user.id
 
@@ -634,9 +562,6 @@ async def callback_show_journal(callback: CallbackQuery):
             await callback.answer()
             return
 
-        # await show_user_journal_page(callback, user_id, 1)
-        # await callback.answer()
-
         # Получаем последние 10 записей пользователя
         records = db.get_user_records(user_id, limit=10)
 
@@ -645,8 +570,10 @@ async def callback_show_journal(callback: CallbackQuery):
                 "📋 **Мой журнал**\n\n"
                 "📝 У вас пока нет записей в журнале.\n"
                 "Сделайте первую отметку о прибытии или убытии!",
-                parse_mode="Markdown"
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Главное меню", callback_data="main_menu")]])
             )
+            await callback.answer()
             return
 
         # Формируем красивый текст журнала
@@ -696,7 +623,7 @@ async def callback_show_journal(callback: CallbackQuery):
         logging.error(f"Ошибка в callback_show_journal: {e}")
         await callback.message.edit_text(
             "❌ Ошибка при загрузке журнала.\nПопробуйте позже.",
-            reply_markup=get_journal_keyboard()
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Главное меню", callback_data="main_menu")]])
         )
         await callback.answer()
 
