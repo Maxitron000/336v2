@@ -157,6 +157,22 @@ async def test_bot_functionality(bot):
 
 async def main():
     """Основная функция для запуска бота"""
+    # Проверяем, не запущен ли уже другой экземпляр
+    import psutil
+    import os
+    
+    current_pid = os.getpid()
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        try:
+            if proc.info['pid'] != current_pid and proc.info['name'] == 'python':
+                if any('main.py' in str(cmd) for cmd in proc.info['cmdline'] if cmd):
+                    print_colored(f"⚠️  Обнаружен запущенный процесс бота (PID: {proc.info['pid']})", Colors.WARNING)
+                    print_colored("🔄 Завершаем старый процесс...", Colors.WARNING)
+                    proc.terminate()
+                    proc.wait(timeout=5)
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.TimeoutExpired):
+            pass
+    
     # Настройка логирования (скрываем лишние сообщения)
     logging.basicConfig(
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -243,7 +259,17 @@ async def main():
 
         # Запуск бота
         print_colored("\n📡 Начало прослушивания сообщений...", Colors.OKCYAN)
-        await dp.start_polling(bot)
+        
+        try:
+            await dp.start_polling(bot, skip_updates=True)
+        except Exception as polling_error:
+            if "Conflict" in str(polling_error):
+                print_colored(f"\n⚠️  Конфликт с другим экземпляром бота!", Colors.WARNING + Colors.BOLD)
+                print_colored("🔄 Попытка перезапуска через 5 секунд...", Colors.WARNING)
+                await asyncio.sleep(5)
+                await dp.start_polling(bot, skip_updates=True)
+            else:
+                raise polling_error
 
     except Exception as e:
         print_colored(f"\n❌ КРИТИЧЕСКАЯ ОШИБКА ЗАПУСКА: {e}", Colors.FAIL + Colors.BOLD)
