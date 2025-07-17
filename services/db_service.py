@@ -67,10 +67,28 @@ class DatabaseService:
                     else:
                         logging.warning(f"⚠️ Ошибка добавления колонки added_at: {e}")
 
+                # Ensure main admin is added
+                self.ensure_main_admin(conn)
+
                 conn.commit()
                 logging.info("✅ База данных инициализирована")
         except Exception as e:
             logging.error(f"Ошибка инициализации БД: {e}")
+
+    def ensure_main_admin(self, conn: sqlite3.Connection):
+        """Гарантирует, что главный админ добавлен в таблицу"""
+        try:
+            from config import MAIN_ADMIN_ID
+            cursor = conn.cursor()
+            cursor.execute(
+                'INSERT OR IGNORE INTO admins (user_id, added_at) VALUES (?, CURRENT_TIMESTAMP)',
+                (MAIN_ADMIN_ID,)
+            )
+            logging.info(f"✅ Главный админ {MAIN_ADMIN_ID} добавлен")
+        except ImportError:
+            logging.warning("⚠️ config.py не найден, главный админ не добавлен")
+        except Exception as e:
+            logging.error(f"❌ Ошибка добавления главного админа: {e}")
 
     def add_user(self, user_id: int, username: str, full_name: str) -> bool:
         """Добавить пользователя"""
@@ -671,16 +689,16 @@ class DatabaseService:
             with sqlite3.connect(self.db_path) as conn:
                 # Подсчитываем общее количество записей перед удалением
                 total_records = 0
-                
+
                 # Считаем записи в каждой таблице
                 cursor = conn.execute("SELECT COUNT(*) FROM records")
                 records_count = cursor.fetchone()[0]
                 total_records += records_count
-                
+
                 cursor = conn.execute("SELECT COUNT(*) FROM users")
                 users_count = cursor.fetchone()[0]
                 total_records += users_count
-                
+
                 cursor = conn.execute("SELECT COUNT(*) FROM admins")
                 admins_count = cursor.fetchone()[0]
                 total_records += admins_count
@@ -788,6 +806,7 @@ class DatabaseService:
         """Альтернативный метод удаления администратора"""
         return self.remove_admin(user_id)
 
+```python
     def export_records_to_excel(self, records: list, period_description: str = "") -> str:
         """Экспорт записей в Excel файл с улучшенным форматированием"""
         try:
@@ -959,7 +978,7 @@ class DatabaseService:
         if not EXPORT_AVAILABLE:
             logging.error("❌ Библиотеки для экспорта недоступны")
             return None
-            
+
         try:
             import os
 
@@ -1078,4 +1097,29 @@ class DatabaseService:
                 return records
         except Exception as e:
             logging.error(f"Ошибка получения записей за период: {e}")
+            return []
+
+    def search_user(self, query: str) -> List[Dict[str, Any]]:
+        """Поиск пользователя по имени или части имени (без учета регистра)"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute("""
+                    SELECT id, full_name, username, created_at
+                    FROM users 
+                    WHERE LOWER(full_name) LIKE LOWER(?) OR LOWER(username) LIKE LOWER(?)
+                    ORDER BY full_name
+                """, (f"%{query}%", f"%{query}%"))
+
+                users = []
+                for row in cursor.fetchall():
+                    users.append({
+                        'id': row[0],
+                        'full_name': row[1],
+                        'username': row[2],
+                        'created_at': row[3]
+                    })
+                return users
+        except Exception as e:
+            logging.error(f"❌ Ошибка поиска пользователя: {e}")
             return []
