@@ -726,8 +726,12 @@ async def callback_export_action(callback: CallbackQuery):
         elif export_type == "csv":
             # CSV Export logic
             records = db.get_all_records(days=30, limit=10000)
-            filename = db.export_to_csv(days=30) if records else None
-            period_text = "CSV экспорт за 30 дней"
+            if records:
+                filename = db.export_to_csv(days=30)
+                period_text = "CSV экспорт за 30 дней"
+            else:
+                filename = None
+                period_text = "CSV экспорт за 30 дней"
 
         elif export_type == "pdf":
             # PDF Export logic
@@ -923,17 +927,13 @@ async def callback_export_excel_period(callback: CallbackQuery):
 
         elif period == "week":
             # Экспорт за неделю
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=7)
-            records = db.get_records_by_period(start_date, end_date)
+            records = db.get_all_records(days=7)
             period_text = "за последние 7 дней"
             filename_period = "week"
 
         elif period == "month":
             # Экспорт за месяц
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=30)
-            records = db.get_records_by_period(start_date, end_date)
+            records = db.get_all_records(days=30)
             period_text = "за последние 30 дней"
             filename_period = "month"
 
@@ -960,7 +960,7 @@ async def callback_export_excel_period(callback: CallbackQuery):
                     start_date = end_date - timedelta(days=30)
 
                 # Создаем Excel файл
-                filename = db.export_records_to_excel(start_date, end_date, filename_period)
+                filename = db.export_records_to_excel(records, period_text)
 
                 if filename:
                     # Отправляем файл пользователю

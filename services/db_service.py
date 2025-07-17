@@ -658,6 +658,10 @@ class DatabaseService:
             logging.error(f"Ошибка при очистке всех записей: {e}")
             return 0
 
+    def cleanup_all_records(self) -> int:
+        """Альтернативный метод для полной очистки записей"""
+        return self.clear_all_records()
+
     def full_database_reset(self):
         """Полная очистка базы данных"""
         try:
@@ -1007,3 +1011,22 @@ class DatabaseService:
         except Exception as e:
             logging.error(f"Ошибка экспорта за 30 дней: {e}")
             return None
+
+    def get_records_by_period(self, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
+        """Получить записи за определенный период"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute('''
+                    SELECT r.*, u.full_name 
+                    FROM records r
+                    JOIN users u ON r.user_id = u.id
+                    WHERE r.timestamp BETWEEN ? AND ?
+                    ORDER BY r.timestamp ASC
+                ''', (start_date.isoformat(), end_date.isoformat()))
+                records = [dict(row) for row in cursor.fetchall()]
+                logging.info(f"Найдено записей за период {start_date} - {end_date}: {len(records)}")
+                return records
+        except Exception as e:
+            logging.error(f"Ошибка получения записей за период: {e}")
+            return []
