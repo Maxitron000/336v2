@@ -385,13 +385,13 @@ async def callback_personnel_action(callback: CallbackQuery):
             )
             # Здесь можно добавить FSM состояние для поиска
             text = "🔍 Поиск временно недоступен. Используйте общий поиск в админ-панели."
-            
+
         elif action == "details":
             # Показываем детальную статистику по бойцам
             users = db.get_all_users()
             text = f"📊 **Детальная информация**\n\n"
             text += f"👥 Всего бойцов: {len(users)}\n\n"
-            
+
             # Статистика активности за последние 30 дней
             records = db.get_all_records(days=30, limit=1000)
             if records:
@@ -399,14 +399,14 @@ async def callback_personnel_action(callback: CallbackQuery):
                 for record in records:
                     name = record['full_name']
                     user_activity[name] = user_activity.get(name, 0) + 1
-                
+
                 text += "📈 **Активность за 30 дней:**\n"
                 sorted_activity = sorted(user_activity.items(), key=lambda x: x[1], reverse=True)
                 for i, (name, count) in enumerate(sorted_activity[:10], 1):
                     text += f"{i}. {name}: {count} записей\n"
             else:
                 text += "📝 Записей активности не найдено"
-            
+
         elif action == "bulk":
             text = "🔧 **Массовые действия**\n\n"
             text += "Доступные операции:\n"
@@ -414,7 +414,7 @@ async def callback_personnel_action(callback: CallbackQuery):
             text += "• Групповые уведомления\n"
             text += "• Экспорт списков\n\n"
             text += "⚙️ Функция в разработке"
-            
+
         else:
             text = "⚙️ Функция в разработке"
 
@@ -531,22 +531,22 @@ async def callback_analytics_action(callback: CallbackQuery):
                 from collections import defaultdict
                 hourly_stats = defaultdict(int)
                 daily_stats = defaultdict(int)
-                
+
                 for record in records:
                     timestamp = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
                     hour = timestamp.hour
                     day = timestamp.strftime('%A')
                     hourly_stats[hour] += 1
                     daily_stats[day] += 1
-                
+
                 text = "📅 **Временной анализ (30 дней)**\n\n"
-                
+
                 # Самые активные часы
                 text += "🕒 **Пиковые часы активности:**\n"
                 sorted_hours = sorted(hourly_stats.items(), key=lambda x: x[1], reverse=True)
                 for hour, count in sorted_hours[:5]:
                     text += f"• {hour:02d}:00 - {count} записей\n"
-                
+
                 text += "\n📆 **По дням недели:**\n"
                 day_names = {
                     'Monday': 'Понедельник',
@@ -557,7 +557,7 @@ async def callback_analytics_action(callback: CallbackQuery):
                     'Saturday': 'Суббота',
                     'Sunday': 'Воскресенье'
                 }
-                
+
                 for day, count in daily_stats.items():
                     day_ru = day_names.get(day, day)
                     text += f"• {day_ru}: {count} записей\n"
@@ -568,27 +568,27 @@ async def callback_analytics_action(callback: CallbackQuery):
             # ТОП активности
             records = db.get_all_records(days=30)
             users = db.get_all_users()
-            
+
             text = "🏆 **ТОП активности за месяц**\n\n"
-            
+
             if records and users:
                 # ТОП по количеству записей
                 user_records = {}
                 location_records = {}
-                
+
                 for record in records:
                     name = record['full_name']
                     location = record['location']
                     user_records[name] = user_records.get(name, 0) + 1
                     if record['action'] == 'не в части':
                         location_records[location] = location_records.get(location, 0) + 1
-                
+
                 # ТОП пользователи
                 text += "👑 **Самые активные бойцы:**\n"
                 sorted_users = sorted(user_records.items(), key=lambda x: x[1], reverse=True)
                 for i, (name, count) in enumerate(sorted_users[:5], 1):
                     text += f"{i}. {name} - {count} записей\n"
-                
+
                 # ТОП локации
                 if location_records:
                     text += "\n📍 **Популярные локации:**\n"
@@ -669,7 +669,7 @@ async def callback_export_action(callback: CallbackQuery):
                 ],
                 [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_export_menu")]
             ]
-            
+
             await callback.message.edit_text(
                 "📅 **Выберите период для экспорта:**\n\n"
                 "Выберите временной интервал для экспорта данных:",
@@ -685,10 +685,12 @@ async def callback_export_action(callback: CallbackQuery):
             await callback.answer("⚙️ PDF экспорт в разработке", show_alert=True)
             return
         elif export_type == "weekly":
-            filename = db.export_to_excel(days=7)
+            records = db.get_all_records(days=7, limit=1000)
+            filename = db.export_records_to_excel(records, "последние 7 дней") if records else db.create_empty_export_file("последние 7 дней")
             period_text = "еженедельный отчет"
         elif export_type == "monthly":
-            filename = db.export_to_excel(days=30)
+            records = db.get_all_records(days=30, limit=1000)
+            filename = db.export_records_to_excel(records, "последние 30 дней") if records else db.create_empty_export_file("последние 30 дней")
             period_text = "месячный отчет"
         else:
             await callback.answer("⚙️ Функция в разработке", show_alert=True)
@@ -721,34 +723,34 @@ async def callback_export_period(callback: CallbackQuery):
 
     try:
         from datetime import datetime, timedelta
-        
+
         # Сначала показываем сообщение о начале экспорта
         await callback.message.edit_text(
             "🔄 **Подготовка экспорта...**\n\n"
             "Пожалуйста, подождите, идет обработка данных.",
             parse_mode="Markdown"
         )
-        
+
         if period == "today":
             # Экспорт за сегодня
             today = datetime.now().date()
             records = db.get_records_by_date(str(today))
             period_text = f"за сегодня ({today.strftime('%d.%m.%Y')})"
             filename_period = "today"
-            
+
         elif period == "yesterday":
             # Экспорт за вчера
             yesterday = (datetime.now() - timedelta(days=1)).date()
             records = db.get_records_by_date(str(yesterday))
             period_text = f"за вчера ({yesterday.strftime('%d.%m.%Y')})"
             filename_period = "yesterday"
-            
+
         elif period == "week":
             # Экспорт за неделю
             records = db.get_all_records(days=7, limit=1000)
             period_text = "за последние 7 дней"
             filename_period = "week"
-            
+
         elif period == "month":
             # Экспорт за месяц
             records = db.get_all_records(days=30, limit=1000)
@@ -761,30 +763,30 @@ async def callback_export_period(callback: CallbackQuery):
         # Создаем файл экспорта
         if records and len(records) > 0:
             filename = db.export_records_to_excel(records, period_text)
-            
+
             if filename:
                 from aiogram.types import FSInputFile
                 import os
-                
+
                 if os.path.exists(filename):
                     # Отправляем файл
                     document = FSInputFile(filename, filename=f"military_records_{filename_period}.xlsx")
                     caption_text = f"📤 Экспорт {period_text}\n📊 Записей: {len(records)}"
-                    
+
                     await callback.message.answer_document(
                         document,
                         caption=caption_text
                     )
-                    
+
                     # Удаляем временный файл после отправки
                     try:
                         os.remove(filename)
                     except Exception as cleanup_error:
                         logging.warning(f"Не удалось удалить временный файл: {cleanup_error}")
-                        
+
                     # Обновляем сообщение
                     result_text = f"✅ **Экспорт завершен**\n\n📤 Данные {period_text} успешно экспортированы и отправлены.\n📊 Обработано записей: {len(records)}"
-                    
+
                     await callback.message.edit_text(
                         result_text,
                         reply_markup=get_back_keyboard("admin_export_menu"),
@@ -810,30 +812,30 @@ async def callback_export_period(callback: CallbackQuery):
         else:
             # Если нет записей, создаем пустой файл с информацией
             filename = db.create_empty_export_file(period_text)
-            
+
             if filename:
                 from aiogram.types import FSInputFile
                 import os
-                
+
                 if os.path.exists(filename):
                     # Отправляем пустой файл
                     document = FSInputFile(filename, filename=f"military_records_{filename_period}_empty.xlsx")
                     caption_text = f"📤 Экспорт {period_text}\n❌ Нет данных за выбранный период"
-                    
+
                     await callback.message.answer_document(
                         document,
                         caption=caption_text
                     )
-                    
+
                     # Удаляем временный файл после отправки
                     try:
                         os.remove(filename)
                     except Exception as cleanup_error:
                         logging.warning(f"Не удалось удалить временный файл: {cleanup_error}")
-                        
+
                     # Обновляем сообщение
                     result_text = f"✅ **Экспорт завершен**\n\n📤 Файл {period_text} создан.\n❌ За этот период нет записей о движении персонала."
-                    
+
                     await callback.message.edit_text(
                         result_text,
                         reply_markup=get_back_keyboard("admin_export_menu"),

@@ -909,3 +909,27 @@ class DatabaseService:
         except Exception as e:
             logging.error(f"Ошибка экспорта в CSV: {e}")
             return None
+
+    def export_weekly_report(self) -> Optional[str]:
+        """Экспорт еженедельного отчета"""
+        try:
+            records = self.get_all_records(days=7, limit=1000)
+            if records:
+                return self.export_records_to_excel(records, "еженедельный отчет")
+            else:
+                return self.create_empty_export_file("еженедельный отчет")
+        except Exception as e:
+            logging.error(f"Ошибка создания еженедельного отчета: {e}")
+            return None
+
+    def export_monthly_report(self) -> Optional[str]:
+        """Экспорт месячного отчета"""
+        try:
+            records = self.get_all_records(days=30, limit=1000)
+            if records:
+                return self.export_records_to_excel(records, "месячный отчет")
+            else:
+                return self.create_empty_export_file("месячный отчет")
+        except Exception as e:
+            logging.error(f"Ошибка создания месячного отчета: {e}")
+            return None
