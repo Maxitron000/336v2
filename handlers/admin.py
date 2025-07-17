@@ -495,10 +495,6 @@ async def callback_analytics_action(callback: CallbackQuery):
         )
         await callback.answer()
 
-    except Exception as e:
-        logging.error(f"Ошибка аналитики: {e}")
-        await callback.answer("❌ Ошибка получения аналитики", show_alert=True)
-
 @router.callback_query(F.data == "admin_export_menu")
 async def callback_admin_export_menu(callback: CallbackQuery):
     """Меню экспорта"""
@@ -718,6 +714,113 @@ async def callback_admin_list(callback: CallbackQuery):
         logging.error(f"Ошибка в admin_list: {e}")
         await callback.answer("❌ Ошибка получения данных", show_alert=True)
 
+@router.callback_query(F.data == "admin_remove")
+async def callback_admin_remove(callback: CallbackQuery):
+    """Удалить админа"""
+    user_id = callback.from_user.id
+
+    if user_id != MAIN_ADMIN_ID:
+        await callback.answer("❌ Доступно только главному администратору", show_alert=True)
+        return
+
+    try:
+        admins = db.get_all_admins()
+        regular_admins = [admin for admin in admins if admin['id'] != MAIN_ADMIN_ID]
+
+        if not regular_admins:
+            await callback.message.edit_text(
+                "❌ Нет администраторов для удаления.\n"
+                "Главный администратор не может быть удален.",
+                reply_markup=get_back_keyboard("admin_manage"),```python
+                parse_mode="Markdown"
+            )
+            return
+
+        text = "➖ **Удаление администратора**\n\n"
+        text += "⚠️ Выберите администратора для удаления:\n\n"
+
+        keyboard = []
+        for admin in regular_admins:
+            button_text = f"❌ {admin['full_name']}"
+            callback_data = f"remove_admin_select_{admin['id']}"
+            keyboard.append([InlineKeyboardButton(text=button_text, callback_data=callback_data)])
+
+        keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="admin_manage")])
+
+        await callback.message.edit_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+            parse_mode="Markdown"
+        )
+        await callback.answer()
+    except Exception as e:
+        logging.error(f"Ошибка в admin_remove: {e}")
+        await callback.answer("❌ Ошибка получения данных", show_alert=True)
+
+@router.callback_query(F.data.startswith("remove_admin_select_"))
+async def callback_remove_admin_select(callback: CallbackQuery):
+    """Подтверждение удаления админа"""
+    user_id = callback.from_user.id
+
+    if user_id != MAIN_ADMIN_ID:
+        await callback.answer("❌ Доступно только главному администратору", show_alert=True)
+        return
+
+    admin_id_to_remove = int(callback.data.split("_")[-1])
+
+    admin_to_remove = db.get_user(admin_id_to_remove)
+
+    if not admin_to_remove:
+        await callback.answer("❌ Администратор не найден", show_alert=True)
+        return
+
+    keyboard = [
+        [
+            InlineKeyboardButton(text="✅ Подтвердить удаление", callback_data=f"remove_admin_confirm_{admin_id_to_remove}"),
+            InlineKeyboardButton(text="❌ Отменить", callback_data="admin_remove")
+        ],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_manage")]
+    ]
+
+    text = f"⚠️ **Подтверждение удаления**\n\n"
+    text += f"Вы уверены, что хотите удалить администратора:\n"
+    text += f"**{admin_to_remove['full_name']}**?\n\n"
+    text += "Подтвердите действие:"
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("remove_admin_confirm_"))
+async def callback_remove_admin_confirm(callback: CallbackQuery):
+    """Удаление админа"""
+    user_id = callback.from_user.id
+
+    if user_id != MAIN_ADMIN_ID:
+        await callback.answer("❌ Доступно только главному администратору", show_alert=True)
+        return
+
+    admin_id_to_remove = int(callback.data.split("_")[-1])
+
+    admin_to_remove = db.get_user(admin_id_to_remove)
+
+    if not admin_to_remove:
+        await callback.answer("❌ Администратор не найден", show_alert=True)
+        return
+
+    if db.delete_admin(admin_id_to_remove):
+        await callback.message.edit_text(
+            f"✅ Администратор **{admin_to_remove['full_name']}** успешно удален!",
+            reply_markup=get_back_keyboard("admin_manage"),
+            parse_mode="Markdown"
+        )
+        await callback.answer()
+    else:
+        await callback.answer("❌ Ошибка при удалении администратора. Попробуйте еще раз.")
+
 @router.message(Command("admin"))
 async def cmd_admin(message: Message):
     """Команда /admin"""
@@ -911,12 +1014,12 @@ async def callback_settings_action(callback: CallbackQuery):
             text += "Это действие удалит ВСЕ записи из системы!\n"
             text += "Данное действие необратимо.\n\n"
             text += "Для подтверждения нажмите кнопку ниже:"
-            
+
             keyboard = [
                 [InlineKeyboardButton(text="🗑️ ПОДТВЕРДИТЬ ОЧИСТКУ", callback_data="settings_confirm_full_cleanup")],
                 [InlineKeyboardButton(text="🔙 Отмена", callback_data="admin_settings")]
             ]
-            
+
             await callback.message.edit_text(
                 text,
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
@@ -957,7 +1060,7 @@ async def callback_settings_action(callback: CallbackQuery):
             # Системная информация
             import psutil
             import platform
-            
+
             text = "💻 **Системная информация**\n\n"
             text += f"🐍 Python: {platform.python_version()}\n"
             text += f"💻 Система: {platform.system()}\n"

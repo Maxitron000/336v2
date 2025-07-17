@@ -650,3 +650,14 @@ class DatabaseService:
         except Exception as e:
             logging.error(f"Ошибка при получении статистики БД: {e}")
             return {}
+
+    def remove_admin(self, user_id: int) -> bool:
+        """Удалить администратора"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute("DELETE FROM admins WHERE user_id = ?", (user_id,))
+                conn.commit()
+                return cursor.rowcount > 0
+        except Exception as e:
+            logging.error(f"Ошибка при удалении администратора: {e}")
+            return False
