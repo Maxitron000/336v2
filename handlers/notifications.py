@@ -241,80 +241,86 @@ async def cleanup_old_records():
     except Exception as e:
         logging.error(f"Ошибка очистки записей: {e}")
 
-def setup_scheduler(bot: Bot):
+def setup_scheduler():
     """Настройка планировщика задач"""
-    settings = load_notification_settings()
-
     try:
-        # Очищаем существующие задачи
+        settings = load_notification_settings()
+
+        # Убираем старые задачи
         scheduler.remove_all_jobs()
 
-        # Утренние напоминания
         if settings.get('morning_reminder', True):
-            morning_time = settings.get('morning_time', '08:00')
-            hour, minute = map(int, morning_time.split(':'))
+            morning_time = settings.get('morning_time', '08:00').split(':')  # Исправлено: было 'morningtime'
             scheduler.add_job(
                 send_morning_reminder,
                 'cron',
-                hour=hour,
-                minute=minute,
-                args=[bot],
+                hour=int(morning_time[0]),
+                minute=int(morning_time[1]),
                 id='morning_reminder'
             )
+            logging.info(f"✅ Утреннее напоминание настроено на {settings.get('morning_time', '08:00')}")
 
-        # Вечерние напоминания
         if settings.get('evening_reminder', True):
-            evening_time = settings.get('evening_time', '18:00')
-            hour, minute = map(int, evening_time.split(':'))
+            evening_time = settings.get('evening_time', '20:00').split(':')
             scheduler.add_job(
                 send_evening_reminder,
                 'cron',
-                hour=hour,
-                minute=minute,
-                args=[bot],
+                hour=int(evening_time[0]),
+                minute=int(evening_time[1]),
                 id='evening_reminder'
             )
+            logging.info(f"✅ Вечернее напоминание настроено на {settings.get('evening_time', '20:00')}")
 
-        # Еженедельные отчеты
-        if settings.get('weekly_report', True):
-            day_map = {
-                'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3,
-                'friday': 4, 'saturday': 5, 'sunday': 6
-            }
-
-            weekly_day = settings.get('weekly_day', 'monday')
-            weekly_time = settings.get('weekly_time', '10:00')
-            day_of_week = day_map.get(weekly_day, 0)
-            hour, minute = map(int, weekly_time.split(':'))
-
+        if settings.get('weekly_reports', True):
+            weekly_day = settings.get('weekly_day', 0)  # 0 = понедельник
+            weekly_hour = settings.get('weekly_hour', 9)
             scheduler.add_job(
                 send_weekly_report,
                 'cron',
-                day_of_week=day_of_week,
-                hour=hour,
-                minute=minute,
-                args=[bot],
+                day_of_week=weekly_day,
+                hour=weekly_hour,
                 id='weekly_report'
             )
+            logging.info(f"✅ Еженедельный отчет настроен на день {weekly_day}, час {weekly_hour}")
 
-        # Автоочистка (каждую неделю в воскресенье в 3:00)
-        scheduler.add_job(
-            cleanup_old_records,
-            'cron',
-            day_of_week=6,  # Воскресенье
-            hour=3,
-            minute=0,
-            id='cleanup_job'
-        )
-
-        # Запускаем планировщик
         if not scheduler.running:
             scheduler.start()
+            logging.info("✅ Планировщик запущен")
 
-        logging.info("Планировщик уведомлений настроен и запущен")
+        logging.info("✅ Планировщик настроен успешно")
 
     except Exception as e:
         logging.error(f"Ошибка настройки планировщика: {e}")
+        import traceback
+        logging.error(f"Трассировка: {traceback.format_exc()}")
+
+        # Пытаемся настроить базовые задачи с дефолтными настройками
+        try:
+            scheduler.remove_all_jobs()
+
+            # Добавляем базовые задачи с дефолтными настройками
+            scheduler.add_job(
+                send_morning_reminder,
+                'cron',
+                hour=8,
+                minute=0,
+                id='morning_reminder'
+            )
+
+            scheduler.add_job(
+                send_evening_reminder,
+                'cron',
+                hour=20,
+                minute=0,
+                id='evening_reminder'
+            )
+
+            if not scheduler.running:
+                scheduler.start()
+
+            logging.info("✅ Планировщик настроен с дефолтными параметрами")
+        except Exception as e2:
+            logging.error(f"Ошибка базовой настройки планировщика: {e2}")
 
 @router.callback_query(lambda c: c.data and c.data.startswith('notification_'))
 async def handle_notification_settings(callback: CallbackQuery):

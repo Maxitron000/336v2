@@ -473,27 +473,43 @@ class DatabaseService:
 
         try:
             records = self.get_all_records(days=days, limit=10000)
-
             if not records:
+                logging.warning("Нет записей для экспорта")
+                return None
+
+            return self.export_records_to_excel(records, f"за последние {days} дней")
+        except Exception as e:
+            logging.error(f"Ошибка экспорта в Excel: {e}")
+            return None
+
+    def export_records_to_excel(self, records: List[Dict[str, Any]], period_desc: str = "") -> Optional[str]:
+        """Экспорт списка записей в Excel с форматированием"""
+        if not EXPORT_AVAILABLE:
+            logging.error("❌ Библиотеки для экспорта недоступны")
+            return None
+
+        try:
+            if not records:
+                logging.warning("Нет записей для экспорта")
                 return None
 
             # Создаем DataFrame
             df = pd.DataFrame(records)
 
-            # Форматируем данные - новые записи идут снизу (хронологический порядок)
+            # Форматируем данные - сортируем по времени (хронологический порядок)
             df['timestamp'] = pd.to_datetime(df['timestamp'])
             df = df.sort_values('timestamp', ascending=True)
 
             # Преобразуем действия для корректного отображения
             df['action'] = df['action'].replace({
-                'в части': 'прибыл',
+                'в части': 'прибыл', 
                 'не в части': 'убыл'
             })
 
             # Переименовываем колонки
             df = df.rename(columns={
                 'full_name': 'ФИО',
-                'action': 'Действие',
+                'action': 'Действие', 
                 'location': 'Локация',
                 'timestamp': 'Дата_Время'
             })
@@ -508,90 +524,158 @@ class DatabaseService:
             # Выбираем нужные колонки в правильном порядке
             df = df[['ФИО', 'Действие', 'Локация', 'Дата', 'Время']]
 
-            # Сохраняем в файл
-            filename = f"military_records_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            # Создаем уникальное имя файла
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"military_records_{timestamp}.xlsx"
+
+            logging.info(f"Создаем Excel файл: {filename}")
 
             # Создаем Excel файл с улучшенным форматированием
-            logging.info(f"Создаем Excel файл: {filename}")
             with pd.ExcelWriter(filename, engine='openpyxl') as writer:
                 df.to_excel(writer, sheet_name='Записи', index=False)
                 logging.info("DataFrame записан в Excel")
 
-                # Получаем рабочий лист и стили
+                # Получаем рабочий лист
                 worksheet = writer.sheets['Записи']
-                from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 
-                # Определяем стили
-                header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-                header_font = Font(color="FFFFFF", bold=True, size=12)
+                try:
+                    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 
-                arrived_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")  # Светло-зеленый
-                departed_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")  # Светло-красный
+                    # Определяем стили
+                    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+                    header_font = Font(color="FFFFFF", bold=True, size=12)
 
-                border = Border(
-                    left=Side(style='thin'),
-                    right=Side(style='thin'),
-                    top=Side(style='thin'),
-                    bottom=Side(style='thin')
-                )
+                    arrived_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")  # Светло-зеленый
+                    departed_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")  # Светло-красный
 
-                # Форматируем заголовки
-                for cell in worksheet[1]:
-                    cell.fill = header_fill
-                    cell.font = header_font
-                    try:
-                        cell.alignment = Alignment(horizontal='center', vertical='center')
-                    except Exception as e:
-                        logging.warning(f"Could not set cell alignment: {e}")
-                    cell.border = border
+                    border = Border(
+                        left=Side(style='thin'),
+                        right=Side(style='thin'),
+                        top=Side(style='thin'),
+                        bottom=Side(style='thin')
+                    )
 
-                # Форматируем данные с цветовой заливкой
-                for row_num, row in enumerate(worksheet.iter_rows(min_row=2), start=2):
-                    action_cell = row[1]  # Колонка "Действие"
+                    # Форматируем заголовки
+                    for cell in worksheet[1]:
+                        cell.fill = header_fill
+                        cell.font = header_font
+                        try:
+                            cell.alignment = Alignment(horizontal='center', vertical='center')
+                        except Exception as style_e:
+                            logging.warning(f"Не удалось применить выравнивание: {style_e}")
+                        cell.border = border
 
-                    # Применяем цветовую заливку в зависимости от действия
-                    if action_cell.value == "прибыл":
+                    # Форматируем данные с цветовой заливкой
+                    for row_num, row in enumerate(worksheet.iter_rows(min_row=2), start=2):
+                        try:
+                            action_cell = row[1]  # Колонка "Действие"
+
+                            # Применяем цветовую заливку в зависимости от действия
+                            if action_cell.value == "прибыл":
+                                for cell in row:
+                                    cell.fill = arrived_fill
+                                    cell.border = border
+                            elif action_cell.value == "убыл":
+                                for cell in row:
+                                    cell.fill = departed_fill
+                                    cell.border = border
+                            else:
+                                for cell in row:
+                                    cell.border = border
+                        except Exception as row_e:
+                            logging.warning(f"Ошибка форматирования строки {row_num}: {row_e}")
+
+                    # Автоматически подгоняем ширину колонок
+                    column_widths = {
+                        'A': 20,  # ФИО - минимум 20
+                        'B': 12,  # Действие - минимум 12
+                        'C': 15,  # Локация - минимум 15
+                        'D': 12,  # Дата - фиксированная ширина
+                        'E': 10   # Время - фиксированная ширина
+                    }
+
+                    # Определяем максимальную ширину для каждой колонки
+                    for row in worksheet.iter_rows():
                         for cell in row:
-                            cell.fill = arrived_fill
-                    elif action_cell.value == "убыл":
-                        for cell in row:
-                            cell.fill = departed_fill
+                            column_letter = cell.column_letter
+                            if column_letter in column_widths:
+                                try:
+                                    cell_length = len(str(cell.value)) if cell.value else 0
+                                    if cell_length > column_widths[column_letter]:
+                                        column_widths[column_letter] = min(cell_length + 3, 50)  # Ограничиваем максимум
+                                except Exception:
+                                    pass
 
-                # Автоматически подгоняем ширину колонок
-                column_widths = {
-                    'A': 0,  # ФИО
-                    'B': 0,  # Действие  
-                    'C': 0,  # Локация
-                    'D': 0,  # Дата
-                    'E': 0   # Время
-                }
+                    # Устанавливаем ширину колонок
+                    for col_letter, width in column_widths.items():
+                        worksheet.column_dimensions[col_letter].width = width
 
-                # Определяем максимальную ширину для каждой колонки
-                for row in worksheet.iter_rows():
-                    for cell in row:
-                        column_letter = cell.column_letter
-                        if column_letter in column_widths:
-                            try:
-                                cell_length = len(str(cell.value)) if cell.value else 0
-                                if cell_length > column_widths[column_letter]:
-                                    column_widths[column_letter] = cell_length
-                            except:
-                                pass
+                    # Устанавливаем высоту строк
+                    for row in worksheet.iter_rows():
+                        worksheet.row_dimensions[row[0].row].height = 20
 
-                # Устанавливаем ширину колонок с особыми настройками
-                worksheet.column_dimensions['A'].width = max(column_widths['A'] + 3, 20)  # ФИО - минимум 20
-                worksheet.column_dimensions['B'].width = max(column_widths['B'] + 2, 12)  # Действие - минимум 12
-                worksheet.column_dimensions['C'].width = max(column_widths['C'] + 2, 15)  # Локация - минимум 15
-                worksheet.column_dimensions['D'].width = 12  # Дата - фиксированная ширина
-                worksheet.column_dimensions['E'].width = 10  # Время - фиксированная ширина
+                    logging.info("Форматирование Excel файла завершено")
 
-                # Устанавливаем высоту строк
-                for row in worksheet.iter_rows():
-                    worksheet.row_dimensions[row[0].row].height = 20
+                except ImportError as import_e:
+                    logging.warning(f"Опции стиля недоступны: {import_e}")
+                except Exception as format_e:
+                    logging.warning(f"Ошибка форматирования Excel: {format_e}")
 
+            logging.info(f"Excel файл создан успешно: {filename}")
             return filename
+
         except Exception as e:
-            logging.error(f"Ошибка экспорта в Excel: {e}")
+            logging.error(f"Ошибка создания Excel файла: {e}")
+            import traceback
+            logging.error(f"Трассировка: {traceback.format_exc()}")
+            return None
+
+    def export_to_csv(self, days: int = 30) -> Optional[str]:
+        """Экспорт данных в CSV"""
+        try:
+            records = self.get_all_records(days=days, limit=10000)
+            
+            if not records:
+                logging.warning("Нет записей для экспорта в CSV")
+                return None
+
+            # Создаем имя файла
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"military_records_{timestamp}.csv"
+
+            # Формируем CSV данные
+            import csv
+            with open(filename, 'w', newline='', encoding='utf-8-sig') as csvfile:
+                fieldnames = ['ФИО', 'Действие', 'Локация', 'Дата', 'Время']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                
+                # Записываем заголовки
+                writer.writeheader()
+                
+                # Записываем данные
+                for record in sorted(records, key=lambda x: x['timestamp']):
+                    timestamp_obj = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
+                    
+                    # Преобразуем действие
+                    action = 'прибыл' if record['action'] == 'в части' else 'убыл'
+                    
+                    # Очищаем локацию от эмодзи
+                    import re
+                    location = re.sub(r'[^\w\s\-\.\,\(\)]', '', record['location']).strip()
+                    
+                    writer.writerow({
+                        'ФИО': record['full_name'],
+                        'Действие': action,
+                        'Локация': location,
+                        'Дата': timestamp_obj.strftime('%d.%m.%Y'),
+                        'Время': timestamp_obj.strftime('%H:%M:%S')
+                    })
+
+            logging.info(f"CSV файл создан успешно: {filename}")
+            return filename
+
+        except Exception as e:
+            logging.error(f"Ошибка создания CSV файла: {e}")
             return None
 
 
