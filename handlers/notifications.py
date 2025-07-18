@@ -7,6 +7,7 @@ import logging
 import json
 import random
 import os
+import asyncio
 
 router = Router()
 db = DatabaseService()
@@ -241,7 +242,7 @@ async def cleanup_old_records():
     except Exception as e:
         logging.error(f"Ошибка очистки записей: {e}")
 
-def setup_scheduler():
+def setup_scheduler(bot: Bot = None):
     """Настройка планировщика задач"""
     try:
         settings = load_notification_settings()
@@ -250,9 +251,9 @@ def setup_scheduler():
         scheduler.remove_all_jobs()
 
         if settings.get('morning_reminder', True):
-            morning_time = settings.get('morning_time', '08:00').split(':')  # Исправлено: было 'morningtime'
+            morning_time = settings.get('morning_time', '08:00').split(':')
             scheduler.add_job(
-                send_morning_reminder,
+                lambda: asyncio.create_task(send_morning_reminder(bot)) if bot else None,
                 'cron',
                 hour=int(morning_time[0]),
                 minute=int(morning_time[1]),
@@ -263,7 +264,7 @@ def setup_scheduler():
         if settings.get('evening_reminder', True):
             evening_time = settings.get('evening_time', '20:00').split(':')
             scheduler.add_job(
-                send_evening_reminder,
+                lambda: asyncio.create_task(send_evening_reminder(bot)) if bot else None,
                 'cron',
                 hour=int(evening_time[0]),
                 minute=int(evening_time[1]),
@@ -275,7 +276,7 @@ def setup_scheduler():
             weekly_day = settings.get('weekly_day', 0)  # 0 = понедельник
             weekly_hour = settings.get('weekly_hour', 9)
             scheduler.add_job(
-                send_weekly_report,
+                lambda: asyncio.create_task(send_weekly_report(bot)) if bot else None,
                 'cron',
                 day_of_week=weekly_day,
                 hour=weekly_hour,
@@ -300,7 +301,7 @@ def setup_scheduler():
 
             # Добавляем базовые задачи с дефолтными настройками
             scheduler.add_job(
-                send_morning_reminder,
+                lambda: asyncio.create_task(send_morning_reminder(bot)) if bot else None,
                 'cron',
                 hour=8,
                 minute=0,
@@ -308,7 +309,7 @@ def setup_scheduler():
             )
 
             scheduler.add_job(
-                send_evening_reminder,
+                lambda: asyncio.create_task(send_evening_reminder(bot)) if bot else None,
                 'cron',
                 hour=20,
                 minute=0,

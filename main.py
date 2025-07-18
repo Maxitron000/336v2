@@ -317,6 +317,7 @@ async def main():
         print("  ✅ Планировщик настроен")
     except Exception as e:
         logging.error(f"Ошибка планировщика: {e}")
+        print("  ⚠️ Планировщик запущен с базовыми настройками")
     print()
 
     # Запуск мониторинга
