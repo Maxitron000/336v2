@@ -267,7 +267,8 @@ async def handle_custom_location(message: Message, state: FSMContext):
             action = "не в части"
 
         # Добавляем запись
-        if db.add_record(user_id, action, custom_location):
+        result = db.add_record(user_id, action, custom_location)
+        if result:
             await state.clear()
 
             status_text = "не в части" if action == "не в части" else "в части"
@@ -287,7 +288,22 @@ async def handle_custom_location(message: Message, state: FSMContext):
             # Уведомляем главного админа ПОСЛЕ главного меню
             await send_admin_notification(message.bot, user_id, action, custom_location)
         else:
-            await message.answer("❌ Ошибка при добавлении записи. Попробуйте позже.")
+            await state.clear()
+            # Проверяем последнюю запись для более точного сообщения
+            last_records = db.get_user_records(user_id, 1)
+            if last_records and last_records[0]['action'] == action:
+                await message.answer(
+                    "ℹ️ Статус уже обновлен!\n\n"
+                    "Ваша отметка была сохранена ранее.\n"
+                    "Используйте /start для возврата в меню."
+                )
+            else:
+                await message.answer(
+                    "❌ Не удалось сохранить запись.\n\n"
+                    "Попробуйте еще раз через несколько секунд.\n"
+                    "Если проблема повторится, обратитесь к администратору.\n\n"
+                    "Используйте /start для возврата в меню."
+                )
     except Exception as e:
         logging.error(f"Ошибка в handle_custom_location: {e}")
         await state.clear()
@@ -516,7 +532,8 @@ async def callback_location_selection(callback: CallbackQuery, state: FSMContext
             action = "не в части"
 
         # Добавляем запись
-        if db.add_record(user_id, action, location):
+        result = db.add_record(user_id, action, location)
+        if result:
             status_text = "не в части" if action == "не в части" else "в части"
 
             # Отправляем сообщение о статусе
@@ -543,7 +560,26 @@ async def callback_location_selection(callback: CallbackQuery, state: FSMContext
             except:
                 pass
         else:
-            await callback.message.edit_text("❌ Ошибка при добавлении записи. Попробуйте позже.")
+            # Проверяем последнюю запись для более точного сообщения об ошибке
+            last_records = db.get_user_records(user_id, 1)
+            if last_records and last_records[0]['action'] == action:
+                keyboard = [[InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")]]
+                await callback.message.edit_text(
+                    "ℹ️ Статус уже обновлен!\n\n"
+                    "Ваша отметка была сохранена ранее.\n"
+                    "Проверьте журнал для подтверждения.",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+                )
+            else:
+                keyboard = [[InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")]]
+                await callback.message.edit_text(
+                    "❌ Не удалось сохранить запись.\n\n"
+                    "Возможные причины:\n"
+                    "• Слишком быстрое нажатие кнопок\n"
+                    "• Временная ошибка системы\n\n"
+                    "Попробуйте еще раз через несколько секунд.",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+                )
 
         await callback.answer()
     except Exception as e:
