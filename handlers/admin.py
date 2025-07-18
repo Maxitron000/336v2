@@ -147,13 +147,6 @@ def get_export_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="📋 CSV - Месяц", callback_data="export_csv")
         ],
         [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_panel")]
-    ])="export_csv")
-        ],
-        [
-            InlineKeyboardButton(text="📑 PDF", callback_data="export_pdf"),
-            InlineKeyboardButton(text="📈 Отчеты", callback_data="export_reports")
-        ],
-        [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_panel")]
     ])
 
 async def is_admin(user_id: int) -> bool:
