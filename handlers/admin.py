@@ -128,8 +128,26 @@ def get_export_keyboard() -> InlineKeyboardMarkup:
     """Получить клавиатуру для экспорта"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="📊 Excel", callback_data="export_excel"),
-            InlineKeyboardButton(text="📄 CSV", callback_data="export_csv")
+            InlineKeyboardButton(text="📊 Excel - Сегодня", callback_data="export_excel_today"),
+            InlineKeyboardButton(text="📄 Отчет - Сегодня", callback_data="export_pdf_today")
+        ],
+        [
+            InlineKeyboardButton(text="📊 Excel - Вчера", callback_data="export_excel_yesterday"),
+            InlineKeyboardButton(text="📄 Отчет - Вчера", callback_data="export_pdf_yesterday")
+        ],
+        [
+            InlineKeyboardButton(text="📊 Excel - Неделя", callback_data="export_excel_week"),
+            InlineKeyboardButton(text="📄 Отчет - Неделя", callback_data="export_pdf_week")
+        ],
+        [
+            InlineKeyboardButton(text="📊 Excel - Месяц", callback_data="export_excel_month"),
+            InlineKeyboardButton(text="📄 Отчет - Месяц", callback_data="export_pdf_month")
+        ],
+        [
+            InlineKeyboardButton(text="📋 CSV - Месяц", callback_data="export_csv")
+        ],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_panel")]
+    ])="export_csv")
         ],
         [
             InlineKeyboardButton(text="📑 PDF", callback_data="export_pdf"),
@@ -782,6 +800,278 @@ async def callback_export_excel_period(callback: CallbackQuery):
     user_id = callback.from_user.id
     if not await is_admin(user_id):
         await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+        return
+
+    try:
+        # Извлекаем период из callback_data
+        period = callback.data.replace("export_excel_", "")
+        
+        # Показываем сообщение о начале экспорта
+        await callback.message.edit_text(
+            "🔄 **Подготовка экспорта...**\n\n"
+            "Пожалуйста, подождите, идет обработка данных.",
+            parse_mode="Markdown"
+        )
+
+        if period == "today":
+            # Экспорт за сегодня
+            records = db.get_records_today()
+            period_text = f"за сегодня ({datetime.now().strftime('%d.%m.%Y')})"
+            filename_period = "today"
+
+        elif period == "yesterday":
+            # Экспорт за вчера
+            records = db.get_records_yesterday()
+            yesterday = (datetime.now() - timedelta(days=1)).date()
+            period_text = f"за вчера ({yesterday.strftime('%d.%m.%Y')})"
+            filename_period = "yesterday"
+
+        elif period == "week":
+            # Экспорт за неделю
+            records = db.get_all_records(days=7)
+            period_text = "за последние 7 дней"
+            filename_period = "week"
+
+        elif period == "month":
+            # Экспорт за месяц
+            records = db.get_all_records(days=30)
+            period_text = "за последние 30 дней"
+            filename_period = "month"
+
+        else:
+            await callback.answer("❌ Неизвестный период", show_alert=True)
+            return
+
+        # Проверяем есть ли данные
+        if not records:
+            await callback.message.edit_text(
+                f"❌ **Нет данных для экспорта**\n\n"
+                f"За выбранный период ({period_text}) записей не найдено.",
+                reply_markup=get_back_keyboard("admin_export_menu"),
+                parse_mode="Markdown"
+            )
+            await callback.answer("❌ Нет данных", show_alert=True)
+            return
+
+        # Создаем Excel файл
+        filename = db.export_records_to_excel(records, period_text)
+        
+        if filename:
+            from aiogram.types import FSInputFile
+            import os
+            
+            # Проверяем существование файла
+            if os.path.exists(filename):
+                document = FSInputFile(filename)
+                await callback.message.answer_document(
+                    document,
+                    caption=f"📊 **Excel экспорт {period_text}**\n\n"
+                           f"📋 Записей: {len(records)}\n"
+                           f"📅 Период: {period_text}",
+                    parse_mode="Markdown"
+                )
+                
+                # Удаляем временный файл
+                try:
+                    os.remove(filename)
+                except:
+                    pass
+                
+                await callback.message.edit_text(
+                    f"✅ **Excel экспорт завершен**\n\n"
+                    f"📊 Файл отправлен успешно\n"
+                    f"📋 Экспортировано записей: {len(records)}",
+                    reply_markup=get_back_keyboard("admin_export_menu"),
+                    parse_mode="Markdown"
+                )
+                await callback.answer("✅ Файл отправлен")
+            else:
+                await callback.message.edit_text(
+                    "❌ **Ошибка создания файла**\n\n"
+                    "Не удалось создать Excel файл.",
+                    reply_markup=get_back_keyboard("admin_export_menu"),
+                    parse_mode="Markdown"
+                )
+                await callback.answer("❌ Ошибка создания файла", show_alert=True)
+        else:
+            await callback.message.edit_text(
+                "❌ **Ошибка экспорта**\n\n"
+                "Возможно, не установлены библиотеки для экспорта.\n"
+                "Проверьте наличие pandas и openpyxl.",
+                reply_markup=get_back_keyboard("admin_export_menu"),
+                parse_mode="Markdown"
+            )
+            await callback.answer("❌ Ошибка экспорта", show_alert=True)
+
+    except Exception as e:
+        logging.error(f"Ошибка Excel экспорта: {e}")
+        await callback.message.edit_text(
+            f"❌ **Ошибка экспорта**\n\n"
+            f"Произошла ошибка: {str(e)[:100]}...",
+            reply_markup=get_back_keyboard("admin_export_menu"),
+            parse_mode="Markdown"
+        )
+        await callback.answer("❌ Ошибка экспорта", show_alert=True)
+
+@router.callback_query(F.data.startswith("export_pdf_"))
+async def callback_export_pdf_period(callback: CallbackQuery):
+    """Экспорт PDF данных за выбранный период"""
+    user_id = callback.from_user.id
+    if not await is_admin(user_id):
+        await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+        return
+
+    try:
+        # Извлекаем период из callback_data
+        period = callback.data.replace("export_pdf_", "")
+        
+        # Показываем сообщение о начале экспорта
+        await callback.message.edit_text(
+            "🔄 **Подготовка PDF экспорта...**\n\n"
+            "Пожалуйста, подождите, идет обработка данных.",
+            parse_mode="Markdown"
+        )
+
+        if period == "today":
+            records = db.get_records_today()
+            period_text = f"за сегодня ({datetime.now().strftime('%d.%m.%Y')})"
+        elif period == "yesterday":
+            records = db.get_records_yesterday()
+            yesterday = (datetime.now() - timedelta(days=1)).date()
+            period_text = f"за вчера ({yesterday.strftime('%d.%m.%Y')})"
+        elif period == "week":
+            records = db.get_all_records(days=7)
+            period_text = "за последние 7 дней"
+        elif period == "month":
+            records = db.get_all_records(days=30)
+            period_text = "за последние 30 дней"
+        else:
+            await callback.answer("❌ Неизвестный период", show_alert=True)
+            return
+
+        # Проверяем есть ли данные
+        if not records:
+            await callback.message.edit_text(
+                f"❌ **Нет данных для PDF экспорта**\n\n"
+                f"За выбранный период ({period_text}) записей не найдено.",
+                reply_markup=get_back_keyboard("admin_export_menu"),
+                parse_mode="Markdown"
+            )
+            await callback.answer("❌ Нет данных", show_alert=True)
+            return
+
+        # Создаем простой текстовый отчет вместо PDF
+        filename = create_text_report(records, period_text)
+        
+        if filename:
+            from aiogram.types import FSInputFile
+            import os
+            
+            if os.path.exists(filename):
+                document = FSInputFile(filename)
+                await callback.message.answer_document(
+                    document,
+                    caption=f"📄 **Текстовый отчет {period_text}**\n\n"
+                           f"📋 Записей: {len(records)}\n"
+                           f"📅 Период: {period_text}",
+                    parse_mode="Markdown"
+                )
+                
+                # Удаляем временный файл
+                try:
+                    os.remove(filename)
+                except:
+                    pass
+                
+                await callback.message.edit_text(
+                    f"✅ **Отчет создан**\n\n"
+                    f"📄 Текстовый файл отправлен\n"
+                    f"📋 Записей в отчете: {len(records)}",
+                    reply_markup=get_back_keyboard("admin_export_menu"),
+                    parse_mode="Markdown"
+                )
+                await callback.answer("✅ Отчет отправлен")
+            else:
+                await callback.message.edit_text(
+                    "❌ **Ошибка создания отчета**",
+                    reply_markup=get_back_keyboard("admin_export_menu"),
+                    parse_mode="Markdown"
+                )
+                await callback.answer("❌ Ошибка создания отчета", show_alert=True)
+        else:
+            await callback.message.edit_text(
+                "❌ **Ошибка экспорта**\n\n"
+                "Не удалось создать отчет.",
+                reply_markup=get_back_keyboard("admin_export_menu"),
+                parse_mode="Markdown"
+            )
+            await callback.answer("❌ Ошибка экспорта", show_alert=True)
+
+    except Exception as e:
+        logging.error(f"Ошибка PDF экспорта: {e}")
+        await callback.message.edit_text(
+            f"❌ **Ошибка экспорта**\n\n"
+            f"Произошла ошибка: {str(e)[:100]}...",
+            reply_markup=get_back_keyboard("admin_export_menu"),
+            parse_mode="Markdown"
+        )
+        await callback.answer("❌ Ошибка экспорта", show_alert=True)
+
+def create_text_report(records: list, period_desc: str) -> str:
+    """Создать текстовый отчет"""
+    try:
+        from datetime import datetime
+        
+        # Создаем имя файла
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"report_{timestamp}.txt"
+        
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write("=" * 60 + "\n")
+            f.write(f"ВОЕННЫЙ ТАБЕЛЬ - ОТЧЕТ {period_desc.upper()}\n")
+            f.write("=" * 60 + "\n")
+            f.write(f"Дата создания: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}\n")
+            f.write(f"Всего записей: {len(records)}\n")
+            f.write("=" * 60 + "\n\n")
+            
+            # Сортируем записи по времени
+            sorted_records = sorted(records, key=lambda x: x['timestamp'])
+            
+            current_date = None
+            for record in sorted_records:
+                try:
+                    timestamp = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
+                    date_str = timestamp.strftime('%d.%m.%Y')
+                    time_str = timestamp.strftime('%H:%M:%S')
+                    
+                    # Если новая дата, добавляем заголовок
+                    if current_date != date_str:
+                        if current_date is not None:
+                            f.write("\n")
+                        f.write(f"--- {date_str} ---\n")
+                        current_date = date_str
+                    
+                    # Определяем статус
+                    status = "ПРИБЫЛ" if record['action'] == 'в части' else "УБЫЛ"
+                    
+                    # Очищаем локацию от эмодзи
+                    import re
+                    location = re.sub(r'[^\w\s\-\.\,\(\)]', '', record['location']).strip()
+                    
+                    f.write(f"{time_str} | {record['full_name']:<20} | {status:<8} | {location}\n")
+                    
+                except Exception as e:
+                    logging.error(f"Ошибка обработки записи: {e}")
+                    continue
+            
+            f.write("\n" + "=" * 60 + "\n")
+            f.write("Конец отчета\n")
+        
+        return filename
+        
+    except Exception as e:
+        logging.error(f"Ошибка создания текстового отчета: {e}")
+        return None.answer("❌ У вас нет прав администратора", show_alert=True)
         return
 
     period = callback.data.split("_")[-1]
