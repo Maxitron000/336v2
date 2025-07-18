@@ -119,13 +119,7 @@ async def handle_name_input(message: Message, state: FSMContext):
         user_id = user.id
         username = user.username or f"user_{user_id}"
 
-        # Защита от спама при регистрации
-        if not can_user_make_action(user_id, "message"):
-            await message.answer("⚠️ Слишком частые попытки регистрации! Подождите немного.")
-            return
-
         full_name = message.text.strip() if message.text else ""
-        update_user_last_action(user_id)
 
         # Проверка на пустое сообщение
         if not full_name:
@@ -344,11 +338,6 @@ async def callback_action_selection(callback: CallbackQuery, state: FSMContext):
     try:
         user_id = callback.from_user.id
 
-        # Защита от спама
-        if not can_user_make_action(user_id, "callback"):
-            await callback.answer("⚠️ Слишком частые действия! Подождите несколько секунд.", show_alert=True)
-            return
-
         # Проверяем, зарегистрирован ли пользователь
         user = db.get_user(user_id)
         if not user:
@@ -358,8 +347,6 @@ async def callback_action_selection(callback: CallbackQuery, state: FSMContext):
             )
             await callback.answer()
             return
-
-        update_user_last_action(user_id)
 
         if "arrive" in callback.data:
             # Проверяем последнее действие пользователя
@@ -391,11 +378,6 @@ async def callback_action_selection(callback: CallbackQuery, state: FSMContext):
             # Для "Прибыл" сразу добавляем запись "в части"
             action = "в части"
             location = "Часть"
-
-            # Дополнительная проверка перед добавлением записи
-            if not can_user_make_action(user_id, "record"):
-                await callback.answer("⚠️ Слишком частые попытки! Подождите.", show_alert=True)
-                return
 
             # Добавляем запись
             result = db.add_record(user_id, action, location)
@@ -477,11 +459,6 @@ async def callback_location_selection(callback: CallbackQuery, state: FSMContext
     try:
         user_id = callback.from_user.id
 
-        # Защита от спама
-        if not can_user_make_action(user_id, "record"):
-            await callback.answer("⚠️ Слишком частые действия! Подождите несколько секунд.", show_alert=True)
-            return
-
         parts = callback.data.split("_", 2)
         if len(parts) < 3:
             await callback.message.edit_text("❌ Некорректные данные.")
@@ -490,8 +467,6 @@ async def callback_location_selection(callback: CallbackQuery, state: FSMContext
 
         action = parts[1]
         location = parts[2]
-
-        update_user_last_action(user_id)
 
         # Проверяем, зарегистрирован ли пользователь
         if not db.get_user(user_id):
@@ -821,51 +796,7 @@ async def show_user_journal_page(callback: CallbackQuery, user_id: int, page: in
             reply_markup=get_journal_keyboard()
         )
 
-# Словарь для отслеживания последних действий пользователей
-user_last_action = {}
-user_message_count = {}  # Счетчик сообщений за период
 
-def can_user_make_action(user_id: int, action_type: str = "general") -> bool:
-    """Проверяет, может ли пользователь сделать новое действие (защита от спама)"""
-    now = datetime.now()
-
-    # Разные интервалы для разных типов действий
-    intervals = {
-        "general": 2,      # Общие действия - 2 секунды
-        "record": 3,       # Добавление записей - 3 секунды
-        "message": 1,      # Сообщения - 1 секунда
-        "callback": 2      # Callback запросы - 2 секунды
-    }
-
-    min_interval = intervals.get(action_type, 2)
-
-    if user_id in user_last_action:
-        last_action_time = user_last_action[user_id]
-        if (now - last_action_time).total_seconds() < min_interval:
-            return False
-
-    # Проверяем количество сообщений за последнюю минуту
-    if action_type == "message":
-        if user_id not in user_message_count:
-            user_message_count[user_id] = []
-
-        # Очищаем старые записи (старше 1 минуты)
-        user_message_count[user_id] = [
-            msg_time for msg_time in user_message_count[user_id]
-            if (now - msg_time).total_seconds() < 60
-        ]
-
-        # Проверяем лимит (максимум 10 сообщений в минуту)
-        if len(user_message_count[user_id]) >= 10:
-            return False
-
-        user_message_count[user_id].append(now)
-
-    return True
-
-def update_user_last_action(user_id: int):
-    """Обновляет время последнего действия пользователя"""
-    user_last_action[user_id] = datetime.now()
 
 # Обработчики пагинации журнала
 # @router.callback_query(F.data.startswith("journal_page_"))
@@ -910,13 +841,7 @@ async def handle_unknown_message(message: Message):
     try:
         user_id = message.from_user.id
 
-        # Усиленная защита от спама для неизвестных сообщений
-        if not can_user_make_action(user_id, "message"):
-            # Не отвечаем на спам, просто игнорируем
-            logging.warning(f"Спам от пользователя {user_id}: {message.text[:50] if message.text else 'no text'}")
-            return
-
-        update_user_last_action(user_id)
+        
 
         # Проверяем, зарегистрирован ли пользователь
         user = db.get_user(user_id)
