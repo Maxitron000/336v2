@@ -162,10 +162,10 @@ class DatabaseService:
                 last_record = last_records[0]  # Первая запись (самая новая)
                 last_action = last_record['action']
                 last_timestamp = datetime.fromisoformat(last_record['timestamp'].replace('Z', '+00:00'))
-                
+
                 # Проверяем, было ли такое же действие в последние 3 секунды (уменьшили время)
                 time_diff = (datetime.now() - last_timestamp.replace(tzinfo=None)).total_seconds()
-                
+
                 # Блокируем только явные дубли в течение 3 секунд
                 if last_action == action and last_record['location'] == location and time_diff < 3:
                     logging.warning(f"Быстрое дублирование записи заблокировано для пользователя {user_id} (разница: {time_diff:.1f}с)")
@@ -630,54 +630,146 @@ class DatabaseService:
             logging.error(f"Трассировка: {traceback.format_exc()}")
             return None
 
-    def export_to_csv(self, days: int = 30) -> Optional[str]:
-        """Экспорт данных в CSV"""
+    def export_to_csv(self, days: int = 30) -> str:
+        """Экспорт записей в CSV файл"""
         try:
+            import pandas as pd
+            from datetime import datetime, timedelta
+
+            # Получаем записи за период
             records = self.get_all_records(days=days, limit=10000)
-            
+
             if not records:
-                logging.warning("Нет записей для экспорта в CSV")
                 return None
+
+            # Создаем DataFrame
+            df = pd.DataFrame(records)
+
+            # Форматируем временные метки
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df['date'] = df['timestamp'].dt.strftime('%d.%m.%Y')
+            df['time'] = df['timestamp'].dt.strftime('%H:%M:%S')
+
+            # Переупорядочиваем колонки
+            df = df[['date', 'time', 'full_name', 'action', 'location']]
+            df.columns = ['Дата', 'Время', 'ФИО', 'Действие', 'Локация']
 
             # Создаем имя файла
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f"military_records_{timestamp}.csv"
+            filename = f"export_{timestamp}.csv"
 
-            # Формируем CSV данные
-            import csv
-            with open(filename, 'w', newline='', encoding='utf-8-sig') as csvfile:
-                fieldnames = ['ФИО', 'Действие', 'Локация', 'Дата', 'Время']
-                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                
-                # Записываем заголовки
-                writer.writeheader()
-                
-                # Записываем данные
-                for record in sorted(records, key=lambda x: x['timestamp']):
-                    timestamp_obj = datetime.fromisoformat(record['timestamp'].replace('Z', '+00:00'))
-                    
-                    # Преобразуем действие
-                    action = 'прибыл' if record['action'] == 'в части' else 'убыл'
-                    
-                    # Очищаем локацию от эмодзи
-                    import re
-                    location = re.sub(r'[^\w\s\-\.\,\(\)]', '', record['location']).strip()
-                    
-                    writer.writerow({
-                        'ФИО': record['full_name'],
-                        'Действие': action,
-                        'Локация': location,
-                        'Дата': timestamp_obj.strftime('%d.%m.%Y'),
-                        'Время': timestamp_obj.strftime('%H:%M:%S')
-                    })
+            # Сохраняем файл
+            df.to_csv(filename, index=False, encoding='utf-8-sig')
 
-            logging.info(f"CSV файл создан успешно: {filename}")
             return filename
 
         except Exception as e:
-            logging.error(f"Ошибка создания CSV файла: {e}")
+            logging.error(f"Ошибка экспорта CSV: {e}")
             return None
 
+    def export_records_to_excel(self, records: list, period_desc: str) -> str:
+        """Экспорт записей в Excel файл"""
+        try:
+            import pandas as pd
+            from datetime import datetime
+
+            if not records:
+                return None
+
+            # Создаем DataFrame
+            df = pd.DataFrame(records)
+
+            # Форматируем временные метки
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df['date'] = df['timestamp'].dt.strftime('%d.%m.%Y')
+            df['time'] = df['timestamp'].dt.strftime('%H:%M:%S')
+
+            # Переупорядочиваем колонки
+            df = df[['date', 'time', 'full_name', 'action', 'location']]
+            df.columns = ['Дата', 'Время', 'ФИО', 'Действие', 'Локация']
+
+            # Создаем имя файла
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"export_excel_{timestamp}.xlsx"
+
+            # Сохраняем в Excel
+            with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Записи', index=False)
+
+                # Добавляем информационный лист
+                info_df = pd.DataFrame({
+                    'Параметр': ['Период', 'Дата создания', 'Всего записей'],
+                    'Значение': [period_desc, datetime.now().strftime('%d.%m.%Y %H:%M:%S'), len(records)]
+                })
+                info_df.to_excel(writer, sheet_name='Информация', index=False)
+
+            return filename
+
+        except Exception as e:
+            logging.error(f"Ошибка экспорта Excel: {e}")
+            return None
+
+    def get_records_today(self) -> list:
+        """Получить записи за сегодня"""
+        try:
+            from datetime import datetime, timedelta
+
+            today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            tomorrow = today + timedelta(days=1)
+
+            cursor = self.conn.execute("""
+                SELECT * FROM records 
+                WHERE timestamp >= ? AND timestamp < ?
+                ORDER BY timestamp DESC
+            """, (today.isoformat(), tomorrow.isoformat()))
+
+            records = []
+            for row in cursor.fetchall():
+                records.append({
+                    'id': row[0],
+                    'user_id': row[1],
+                    'full_name': row[2],
+                    'action': row[3],
+                    'location': row[4],
+                    'timestamp': row[5]
+                })
+
+            return records
+
+        except Exception as e:
+            logging.error(f"Ошибка получения записей за сегодня: {e}")
+            return []
+
+    def get_records_yesterday(self) -> list:
+        """Получить записи за вчера"""
+        try:
+            from datetime import datetime, timedelta
+
+            yesterday = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
+            today = yesterday + timedelta(days=1)
+
+            cursor = self.conn.execute("""
+                SELECT * FROM records 
+                WHERE timestamp >= ? AND timestamp < ?
+                ORDER BY timestamp DESC
+            """, (yesterday.isoformat(), today.isoformat()))
+
+            records = []
+            for row in cursor.fetchall():
+                records.append({
+                    'id': row[0],
+                    'user_id': row[1],
+                    'full_name': row[2],
+                    'action': row[3],
+                    'location': row[4],
+                    'timestamp': row[5]
+                })
+
+            return records
+
+        except Exception as e:
+            logging.error(f"Ошибка получения записей за вчера: {e}")
+            return []
 
     def get_records_by_date(self, date_str: str) -> List[Dict[str, Any]]:
         """Получить записи за конкретную дату"""

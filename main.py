@@ -10,6 +10,7 @@ from services.db_service import DatabaseService
 from config import BOT_TOKEN, MAIN_ADMIN_ID, DB_NAME
 from datetime import datetime
 import sys
+from keep_alive import keep_alive
 
 # Импортируем систему мониторинга
 try:
@@ -194,7 +195,7 @@ def setup_logging():
     # Создаем папку для логов если её нет
     if not os.path.exists('logs'):
         os.makedirs('logs')
-    
+
     # Настройка логирования только в файл для чистого вывода консоли
     logging.basicConfig(
         level=logging.ERROR,  # Показываем только ошибки в консоли
@@ -203,7 +204,7 @@ def setup_logging():
             logging.FileHandler('logs/bot.log', encoding='utf-8'),
         ]
     )
-    
+
     # Отключаем избыточные логи библиотек
     logging.getLogger('aiogram').setLevel(logging.ERROR)
     logging.getLogger('httpx').setLevel(logging.ERROR)
@@ -229,7 +230,7 @@ async def main():
     # Проверка конфигурации
     print("🔧 ПРОВЕРКА КОНФИГУРАЦИИ:")
     print("  🔄 Проверяем переменные окружения...")
-    
+
     if not BOT_TOKEN:
         print("  ❌ Токен Telegram бота не найден!")
         return
@@ -253,7 +254,7 @@ async def main():
     try:
         # Настраиваем логирование для подавления INFO сообщений
         logging.getLogger("root").setLevel(logging.WARNING)
-        
+
         # Инициализируем БД только один раз
         db = DatabaseService()
         print("  ✅ Подключение к БД: OK")
@@ -357,7 +358,7 @@ async def main():
     print("║" + " " * 58 + "║")
     print("╚" + "═" * 58 + "╝")
     print()
-    
+
     # Показываем статус в реальном времени
     print("📊 СТАТУС СИСТЕМЫ:")
     print("  🟢 Все системы работают")
@@ -378,6 +379,9 @@ async def main():
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
+
+    # Запускаем keep_alive сервер
+    keep_alive()
 
     # Запуск бота
     max_retries = 3

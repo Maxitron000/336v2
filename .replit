@@ -5,57 +5,43 @@ modules = ["python-3.12"]
 channel = "stable-24_05"
 
 [workflows]
+runButton = "Bot Production"
 
-[workflows.runBot]
+[[workflows.workflow]]
 name = "Run Bot"
-author = "agent"
+author = 44716284
+mode = "sequential"
 
-[workflows.runBot.metadata]
-agentRequireRestartOnSave = false
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"
 
-[workflows.runBot.tasks]
-
-[workflows.runBot.tasks.runbot]
-name = "runbot"
-runInBackground = true
-
-[workflows.runBot.tasks.runbot.exec]
-program = "python"
-args = ["main.py"]
-
-[workflows.runWebInterface]
+[[workflows.workflow]]
 name = "Run Web Interface"
-author = "agent"
+author = 44716284
+mode = "sequential"
 
-[workflows.runWebInterface.metadata]
-agentRequireRestartOnSave = false
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python web_interface.py"
 
-[workflows.runWebInterface.tasks]
-
-[workflows.runWebInterface.tasks.runweb]
-name = "runweb"
-runInBackground = true
-
-[workflows.runWebInterface.tasks.runweb.exec]
-program = "python"
-args = ["web_interface.py"]
-
-[workflows."Run Bot Fixed"]
+[[workflows.workflow]]
 name = "Run Bot Fixed"
-author = "agent"
+author = 44716284
+mode = "parallel"
 
-[workflows."Run Bot Fixed".metadata]
-agentRequireRestartOnSave = false
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"
 
-[workflows."Run Bot Fixed".tasks]
+[[workflows.workflow]]
+name = "Bot Production"
+author = 44716284
+mode = "sequential"
 
-[workflows."Run Bot Fixed".tasks.bot]
-name = "bot"
-runInBackground = false
-
-[workflows."Run Bot Fixed".tasks.bot.exec]
-program = "python"
-args = ["main.py"]
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"
 
 [deployment]
 run = ["python", "main.py"]
