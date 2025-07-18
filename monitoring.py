@@ -3,10 +3,10 @@ import asyncio
 import logging
 import psutil
 import time
+import os
 from datetime import datetime, timedelta
 from typing import Dict, Any
 from services.db_service import DatabaseService
-import os
 
 class SystemMonitor:
     def __init__(self):
